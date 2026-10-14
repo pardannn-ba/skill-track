@@ -1,73 +1,82 @@
-import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
-
-import { Fonts, ThemeColor } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { StyleSheet, Text, type TextProps } from "react-native";
+import { colors } from "@/constants/theme";
 
 export type ThemedTextProps = TextProps & {
-  type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code';
-  themeColor?: ThemeColor;
+  /** Varian teks yang mengatur ukuran/berat default. */
+  variant?:
+    | "title" // judul besar "Selamat pagi!"
+    | "subtitle" // teks kecil di bawah judul
+    | "cardTitle" // judul di kartu
+    | "body"
+    | "caption" // teks kecil sekunder
+    | "stat" // Angka persentase besar
+    | "levelBadge"; // label kecil badge "Pemula";
+  /** Timpa warna default (primaryText/secondaryText). */
+  color?: string;
+  /** Timpa ketebalan font default. */
+  weight?: "400" | "500" | "600" | "700";
 };
 
-export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
-  const theme = useTheme();
+const variantStyles = StyleSheet.create({
+  title: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "400",
+    color: colors.textSecondary,
+  },
+  cardTitle: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  body: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "400",
+    color: colors.text,
+  },
+  caption: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "400",
+    color: colors.textSecondary,
+  },
+  stat: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  levelBadge: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "500",
+    color: colors.levelText,
+  },
+});
 
+/**
+ * Teks dengan style default yang konsisten sesuai desain Skill-Track.
+ */
+export default function ThemedText({
+  variant = "body",
+  color,
+  style,
+  ...rest
+}: ThemedTextProps) {
+  const variantStyle = variantStyles[variant];
+  const mergedColor = color !== undefined ? { color } : undefined;
   return (
     <Text
-      style={[
-        { color: theme[themeColor ?? 'text'] },
-        type === 'default' && styles.default,
-        type === 'title' && styles.title,
-        type === 'small' && styles.small,
-        type === 'smallBold' && styles.smallBold,
-        type === 'subtitle' && styles.subtitle,
-        type === 'link' && styles.link,
-        type === 'linkPrimary' && styles.linkPrimary,
-        type === 'code' && styles.code,
-        style,
-      ]}
+      style={[variantStyle, mergedColor, style]}
       {...rest}
     />
   );
 }
-
-const styles = StyleSheet.create({
-  small: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: 500,
-  },
-  smallBold: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: 700,
-  },
-  default: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: 500,
-  },
-  title: {
-    fontSize: 48,
-    fontWeight: 600,
-    lineHeight: 52,
-  },
-  subtitle: {
-    fontSize: 32,
-    lineHeight: 44,
-    fontWeight: 600,
-  },
-  link: {
-    lineHeight: 30,
-    fontSize: 14,
-  },
-  linkPrimary: {
-    lineHeight: 30,
-    fontSize: 14,
-    color: '#3c87f7',
-  },
-  code: {
-    fontFamily: Fonts.mono,
-    fontWeight: Platform.select({ android: 700 }) ?? 500,
-    fontSize: 12,
-  },
-});
