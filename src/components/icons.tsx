@@ -6,6 +6,10 @@ import {
   CircleUser,
   Home,
   Search,
+  Settings,
+  SquareCheckBig,
+  Star,
+  X,
   type LucideIcon,
 } from "lucide-react-native";
 
@@ -44,6 +48,26 @@ export const SearchIcon = ({ size = 24, color }: IconProps) => (
 
 export const ProfileIcon = ({ size = 24, color }: IconProps) => (
   <CircleUser size={size} color={color} />
+);
+
+/** Ikon pengaturan (gerigi) di header Profil. */
+export const SettingsIcon = ({ size = 24, color }: IconProps) => (
+  <Settings size={size} color={color} />
+);
+
+/** Ikon buku + tanda centang untuk statistik "Materi Selesai". */
+export const BookCheckIcon = ({ size = 24, color }: IconProps) => (
+  <SquareCheckBig size={size} color={color} />
+);
+
+/** Ikon bintang untuk statistik "Skill Aktif". */
+export const StarIcon = ({ size = 24, color }: IconProps) => (
+  <Star size={size} color={color} />
+);
+
+/** Ikon tutup (X) untuk modal pengaturan profil. */
+export const CloseIcon = ({ size = 24, color }: IconProps) => (
+  <X size={size} color={color} />
 );
 
 export type { LucideIcon };

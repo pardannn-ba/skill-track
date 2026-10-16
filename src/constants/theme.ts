@@ -36,6 +36,10 @@ export const colors = {
   levelBadge: "#123B34",
   /** Teks badge level */
   levelText: "#2DD4BF",
+  /** Warna kuning ikon bintang statistik "Skill Aktif" di Profil */
+  star: "#FACC15",
+  /** Warna buku ikon statistik "Materi Selesai" di Profil */
+  statBook: "#3568FF",
 } as const;
 
 /**

@@ -20,6 +20,7 @@ import {
 import ProgressBar from "@/components/progress-bar";
 import SubjectIcon from "@/components/subject-icon";
 import ThemedText from "@/components/themed-text";
+import { recordActivity } from "@/data/profile";
 
 /** Warna lingkaran/garis timeline berdasarkan status materi. */
 function statusColor(status: LearningMaterialStatus): string {
@@ -88,6 +89,11 @@ export default function LearningPathScreen() {
     if (snapshot === persistedRef.current) {
       return;
     }
+    // Id yang baru muncul = materi yang baru saja diselesaikan;
+    // catat sebagai aktivitas belajar untuk grafik Profil.
+    const newIds = completedIds.filter(
+      (id) => !persistedRef.current.split(" ").filter(Boolean).includes(id),
+    );
     persistedRef.current = snapshot;
     void AsyncStorage.setItem(
       learningStorageKey,
@@ -95,6 +101,9 @@ export default function LearningPathScreen() {
     ).catch(() => {
       // Biarkan gagal; percobaan berikutnya akan menimpa lagi.
     });
+    for (const id of newIds) {
+      void recordActivity(id);
+    }
   }, [completedIds]);
 
   const completed = completedIds ?? [];
