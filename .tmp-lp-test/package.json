@@ -1,0 +1,9 @@
+{
+  "name": "lp-e2e-test",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Temp harness for Learning Path e2e verification (deleted after run)",
+  "dependencies": {
+    "puppeteer-core": "^23.11.1"
+  }
+}

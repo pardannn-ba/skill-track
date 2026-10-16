@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "module": "commonjs",
+    "target": "es2020",
+    "moduleResolution": "node10",
+    "ignoreDeprecations": "6.0",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "rootDir": "..",
+    "outDir": "./out",
+    "baseUrl": "..",
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "files": ["../src/data/learning-path.ts"]
+}

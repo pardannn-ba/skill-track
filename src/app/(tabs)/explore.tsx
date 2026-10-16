@@ -36,6 +36,11 @@ export default function ExploreScreen() {
   }, [query, category]);
 
   const openSkillDetail = (skill: Skill) => {
+    // Kartu HTML di Explore membuka halaman Learning Path (Detail Skill).
+    if (skill.id === "html") {
+      router.push("/learning-path");
+      return;
+    }
     router.push({
       pathname: "/skill-detail",
       params: { id: skill.id },

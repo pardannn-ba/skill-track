@@ -38,4 +38,31 @@ export const colors = {
   levelText: "#2DD4BF",
 } as const;
 
+/**
+ * Palet warna khusus halaman Learning Path (Detail Skill)
+ * sesuai screenshot referensi (lebih terang dari palet dashboard).
+ */
+export const learningColors = {
+  /** Biru utama tombol aksi & materi aktif */
+  primary: "#3568FF",
+  /** Hijau progress & status materi selesai */
+  success: "#35D9AD",
+  /** Background baris materi yang sedang aktif */
+  cardActive: "#1D3557",
+  /** Teks utama */
+  text: "#F5F7FF",
+  /** Teks sekunder */
+  textSecondary: "#9EB2CC",
+  /** Lingkaran materi terkunci */
+  lockedCircle: "#3E5570",
+  /** Angka pada lingkaran materi terkunci */
+  lockedText: "#A9BDD6",
+  /** Garis timeline menuju materi terkunci */
+  lockedLine: "#2C4159",
+  /** Background badge level hijau */
+  badgeBg: "#157F5C",
+  /** Teks badge level hijau */
+  badgeText: "#EFFFF8",
+} as const;
+
 export type AppColor = keyof typeof colors;
