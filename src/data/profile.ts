@@ -1,10 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
-  htmlLearningPath,
-  learningStorageKey,
-  countCompleted,
-  sanitizeCompleted,
+  computeProgress,
+  getLearningPath,
 } from "@/data/learning-path";
+import {
+  computeSummary,
+  loadProgress,
+  startedPaths,
+  type ProgressState,
+} from "@/data/progress-store";
 import { skillsData } from "@/data/skills";
 
 //
@@ -136,7 +140,7 @@ export async function saveUsername(value: string): Promise<void> {
 }
 
 //
-// Statistik & progres (dihitung dari sumber data tunggal Learning Path)
+// Statistik & progres (dihitung dari sumber data tunggal progress-store)
 //
 
 export type SkillProgress = {
@@ -148,86 +152,56 @@ export type SkillProgress = {
 };
 
 export type ProfileStats = {
-  /** Total materi selesai di seluruh learning path yang aktif. */
+  /** Total materi selesai pada skill yang sudah dimulai. */
   completedMaterials: number;
-  /** Total materi pada semua learning path. */
+  /** Total materi pada skill yang sudah dimulai. */
   totalMaterials: number;
   /** Persen keseluruhan 0–100 (aman dari pembagian 0). */
   overallPercent: number;
-  /** Progres per skill. */
+  /** Progres skill yang sudah dimulai saja (bukan seluruh katalog). */
   skills: SkillProgress[];
+  /** Jumlah skill aktif = skill yang sudah dimulai. */
+  activeSkills: number;
 };
 
 /**
- * Hitung statistik dari daftar materi selesai di AsyncStorage.
- * Saat ini hanya learning path HTML yang aktif di aplikasi (dipakai
- * bersama halaman Learning Path & Progress), jadi skill lain tampil 0%
- * tanpa dihitung sebagai skill aktif.
+ * Hitung statistik dari progress store tunggal.
+ * Skill yang belum dimulai tidak dihitung sebagai skill aktif dan
+ * tidak masuk daftar; progress keseluruhan hanya dari skill aktif.
  */
 export async function computeProfileStats(): Promise<ProfileStats> {
-  const completedIds = await loadCompletedIds();
-  const { materials } = htmlLearningPath;
+  const state = await loadProgress();
+  const paths = startedPaths(state);
+  const summary = computeSummary(state);
 
-  const completedMaterials = countCompleted(materials, completedIds);
-  const totalMaterials = materials.length;
-  const overallPercent =
-    totalMaterials > 0
-      ? Math.round((completedMaterials / totalMaterials) * 100)
-      : 0;
-
-  // Learning path yang datanya aktif dipakai di aplikasi saat ini.
-  const paths = [htmlLearningPath];
-
-  // Semua skill dari data aplikasi (urutan sama dengan Explore);
-  // skill tanpa learning path menampilkan 0% dan tidak dihitung aktif.
-  const skillRows: SkillProgress[] = skillsData.map((skill) => {
-    const path = paths.find((item) => item.skillId === skill.id);
-    const percent =
-      path && path.materials.length > 0
-        ? Math.round(
-            (countCompleted(path.materials, completedIds) /
-              path.materials.length) *
-              100,
-          )
-        : 0;
-    return {
-      id: skill.id,
-      name: skill.name,
-      icon: skill.icon,
-      percent,
-    };
-  });
+  const skillRows: SkillProgress[] = paths.map((path) => ({
+    id: path.skillId,
+    name: path.skillName,
+    icon: (skillsData.find((skill) => skill.id === path.skillId)?.icon ??
+      path.icon) as SkillProgress["icon"],
+    percent: computeProgress(path.materials, state.completed),
+  }));
 
   return {
-    completedMaterials,
-    totalMaterials,
-    overallPercent,
+    completedMaterials: summary.completedMaterials,
+    totalMaterials: summary.totalMaterials,
+    overallPercent: summary.overallPercent,
     skills: skillRows,
+    activeSkills: paths.length,
   };
 }
 
-/** Jumlah skill aktif = skill dengan learning path yang bermaterial. */
-export function countActiveSkills(): number {
-  const paths = [htmlLearningPath];
-  return paths.filter((path) => path.materials.length > 0).length;
+/** Baca state progres (wrapper agar halaman Profil tidak impor store langsung). */
+export async function readProgressState(): Promise<ProgressState> {
+  return loadProgress();
 }
 
-// Internal: baca id materi selesai, konsisten dengan learning-path.tsx.
-async function loadCompletedIds(): Promise<string[]> {
-  try {
-    const raw = await AsyncStorage.getItem(learningStorageKey);
-    if (!raw) {
-      return [];
-    }
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return sanitizeCompleted(
-      htmlLearningPath.materials,
-      parsed.filter((value): value is string => typeof value === "string"),
-    );
-  } catch {
-    return [];
-  }
+/**
+ * Jumlah skill aktif = skill yang benar-benar sudah dimulai pengguna
+ * (bukan jumlah seluruh learning path).
+ */
+export function countActiveSkills(state: ProgressState): number {
+  return startedPaths(state).length;
 }
+
+export { getLearningPath };

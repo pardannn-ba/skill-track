@@ -1,26 +1,29 @@
-import { useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft, Check, ChevronRight, Lock } from "lucide-react-native";
 import { colors, learningColors } from "@/constants/theme";
 import {
-  completeActiveMaterial,
-  computeProgress,
-  countCompleted,
+  getLearningPath,
   getActiveMaterialIndex,
   getMaterialStatus,
-  htmlLearningPath,
-  learningStorageKey,
+  countCompleted,
+  computeProgress,
   sanitizeCompleted,
   type LearningMaterial,
   type LearningMaterialStatus,
 } from "@/data/learning-path";
+import {
+  completeMaterial,
+  loadProgress,
+  startSkill,
+  subscribeProgress,
+} from "@/data/progress-store";
+import { recordActivity } from "@/data/profile";
 import ProgressBar from "@/components/progress-bar";
 import SubjectIcon from "@/components/subject-icon";
 import ThemedText from "@/components/themed-text";
-import { recordActivity } from "@/data/profile";
 
 /** Warna lingkaran/garis timeline berdasarkan status materi. */
 function statusColor(status: LearningMaterialStatus): string {
@@ -32,79 +35,55 @@ function statusColor(status: LearningMaterialStatus): string {
     : learningColors.lockedLine;
 }
 
-/** Baca materi yang sudah diselesaikan dari AsyncStorage (sekali saat mount). */
-async function loadCompletedMaterials(): Promise<string[]> {
-  try {
-    const raw = await AsyncStorage.getItem(learningStorageKey);
-    if (!raw) {
-      return [];
-    }
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return sanitizeCompleted(
-      htmlLearningPath.materials,
-      parsed.filter((value): value is string => typeof value === "string"),
-    );
-  } catch {
-    // Gagal membaca = anggap belum ada progres tersimpan.
-    return [];
-  }
-}
-
 /**
- * Halaman Learning Path (Detail Skill) untuk HTML.
+ * Halaman Learning Path (Detail Skill) — dibuka dari kartu skill di
+ * Explore/Profil/Progress dengan param `skillId`. Skill belum dimulai:
+ * seluruh materi terkunci dan tombol "Mulai Belajar" tersedia.
  * Progress dihitung dari jumlah materi selesai (0%, 20%, 40%, ... 100%)
  * dan disimpan di AsyncStorage supaya tidak kembali ke 0% saat app dibuka lagi.
  */
 export default function LearningPathScreen() {
   const router = useRouter();
-  const { materials, skillName, subtitle, level, icon } = htmlLearningPath;
+  const { skillId, from } = useLocalSearchParams<{
+    skillId?: string;
+    from?: string;
+  }>();
 
-  /** null = progres belum dibaca dari penyimpanan. */
+  const path = getLearningPath(skillId ?? "html");
+  const { materials, skillName, subtitle, level, icon } = path ?? {
+    materials: [],
+    skillName: "Skill",
+    subtitle: "",
+    level: "",
+    icon: "html" as const,
+  };
+
+  /** null = state belum dibaca dari penyimpanan. */
   const [completedIds, setCompletedIds] = useState<string[] | null>(null);
-  /** Snapshot terakhir yang sudah tersimpan, agar tidak menulis ulang sia-sia. */
-  const persistedRef = useRef("");
+  const [started, setStarted] = useState<boolean | null>(null);
+  const [starting, setStarting] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
-    void loadCompletedMaterials().then((stored) => {
-      if (!isMounted) {
+    const unsubscribe = subscribeProgress((state) => {
+      if (!isMounted || !path) {
         return;
       }
-      persistedRef.current = stored.join(" ");
-      setCompletedIds(stored);
+      setStarted(state.started.includes(path.skillId));
+      setCompletedIds(sanitizeCompleted(materials, state.completed));
+    });
+    void loadProgress().then((state) => {
+      if (!isMounted || !path) {
+        return;
+      }
+      setStarted(state.started.includes(path.skillId));
+      setCompletedIds(sanitizeCompleted(materials, state.completed));
     });
     return () => {
       isMounted = false;
+      unsubscribe();
     };
-  }, []);
-
-  useEffect(() => {
-    if (completedIds === null) {
-      return;
-    }
-    const snapshot = completedIds.join(" ");
-    if (snapshot === persistedRef.current) {
-      return;
-    }
-    // Id yang baru muncul = materi yang baru saja diselesaikan;
-    // catat sebagai aktivitas belajar untuk grafik Profil.
-    const newIds = completedIds.filter(
-      (id) => !persistedRef.current.split(" ").filter(Boolean).includes(id),
-    );
-    persistedRef.current = snapshot;
-    void AsyncStorage.setItem(
-      learningStorageKey,
-      JSON.stringify(completedIds),
-    ).catch(() => {
-      // Biarkan gagal; percobaan berikutnya akan menimpa lagi.
-    });
-    for (const id of newIds) {
-      void recordActivity(id);
-    }
-  }, [completedIds]);
+  }, [path, materials]);
 
   const completed = completedIds ?? [];
   const completedCount = countCompleted(materials, completed);
@@ -112,37 +91,70 @@ export default function LearningPathScreen() {
   const activeIndex = getActiveMaterialIndex(materials, completed);
   const activeMaterial: LearningMaterial | null =
     activeIndex >= 0 ? materials[activeIndex] : null;
-  const isFinished = activeMaterial === null && completedIds !== null;
+  const isStarted = started === true;
+  const isFinished = started !== null && isStarted && activeMaterial === null;
 
   const handleBack = () => {
-    // Halaman ini hanya dibuka dari Explore (kartu HTML), jadi tujuan
-    // "halaman sebelumnya" selalu Explore. router.back() sengaja tidak
-    // dipakai: route ini ada di dalam tab navigator (push menjadi NAVIGATE/
-    // ganti tab), sehingga tidak ada riwayat pop dan back akan meleset
-    // ke tab awal. router.replace memberi hasil yang deterministik,
-    // termasuk saat dibuka langsung via deep link.
-    router.replace("/explore");
+    // Halaman ini dibuka dari tab Explore/Progress/Home/Profil;
+    // push ke route tab berperilaku seperti NAVIGATE (tanpa riwayat pop),
+    // jadi back yang deterministik: kembali ke tab asal.
+    router.replace(from === "progress" || from === "home" ? "/progress" : "/explore");
   };
 
-  const handleComplete = () => {
-    if (completedIds === null || activeMaterial === null) {
+  const handleStart = async () => {
+    if (!path || isStarted || starting) {
       return;
     }
-    setCompletedIds(completeActiveMaterial(materials, completedIds));
+    setStarting(true);
+    try {
+      await startSkill(path.skillId);
+    } finally {
+      setStarting(false);
+    }
   };
 
-  const openMaterial = (
-    material: LearningMaterial,
-    status: LearningMaterialStatus,
-  ) => {
-    if (status === "locked") {
+  const handleComplete = async () => {
+    if (!started || activeMaterial === null) {
       return;
     }
-    router.push({
-      pathname: "/material-detail",
-      params: { id: material.id },
-    });
+    await completeMaterial(activeMaterial.id);
+    await recordActivity(activeMaterial.id);
   };
+
+  const openMaterial = useCallback(
+    (material: LearningMaterial, status: LearningMaterialStatus) => {
+      // Materi terkunci menampilkan pesan yang jelas (tidak dibuka).
+      if (status === "locked") {
+        const index = materials.findIndex((item) => item.id === material.id);
+        const previous = index > 0 ? materials[index - 1] : null;
+        Alert.alert(
+          "Materi terkunci",
+          previous
+            ? `Selesaikan "${previous.title}" terlebih dahulu untuk membuka materi ini.`
+            : "Selesaikan materi sebelumnya terlebih dahulu.",
+        );
+        return;
+      }
+      router.push({
+        pathname: "/material-detail",
+        params: { id: material.id },
+      });
+    },
+    [materials, router],
+  );
+
+  if (!path) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+        <View style={styles.notFoundWrap}>
+          <ThemedText variant="cardTitle">Skill tidak ditemukan</ThemedText>
+          <Pressable onPress={handleBack} hitSlop={8}>
+            <ThemedText style={styles.backLink}>Kembali</ThemedText>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
@@ -199,7 +211,6 @@ export default function LearningPathScreen() {
         <View style={styles.timelineCard}>
           {materials.map((material, index) => {
             const status = getMaterialStatus(materials, index, completed);
-            const isOpenable = status !== "locked";
             const nextStatus =
               index < materials.length - 1
                 ? getMaterialStatus(materials, index + 1, completed)
@@ -208,15 +219,15 @@ export default function LearningPathScreen() {
             return (
               <Pressable
                 key={material.id}
-                disabled={!isOpenable}
                 onPress={() => openMaterial(material, status)}
                 style={({ pressed }) => [
                   styles.row,
                   status === "active" && styles.rowActive,
-                  pressed && isOpenable && styles.rowPressed,
+                  pressed && status !== "locked" && styles.rowPressed,
                 ]}
-                accessibilityRole={isOpenable ? "button" : undefined}
-                accessibilityState={{ disabled: !isOpenable }}
+                accessibilityRole="button"
+                accessibilityLabel={`Materi ${index + 1}: ${material.title}`}
+                accessibilityState={{ disabled: status === "locked" }}
               >
                 {/* Garis timeline: bagian atas = warna status baris ini,
                     bagian bawah = warna status baris berikutnya. */}
@@ -296,23 +307,44 @@ export default function LearningPathScreen() {
           </View>
         ) : null}
 
-        {/* Tombol tandai selesai */}
-        <Pressable
-          onPress={handleComplete}
-          disabled={completedIds === null || activeMaterial === null}
-          style={({ pressed }) => [
-            styles.completeButton,
-            (completedIds === null || activeMaterial === null) &&
-              styles.completeButtonDisabled,
-            pressed && styles.completeButtonPressed,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Tandai materi aktif selesai"
-        >
-          <ThemedText style={styles.completeButtonText}>
-            Tandai Selesai
-          </ThemedText>
-        </Pressable>
+        {/* Tombol utama: Mulai Belajar (sebelum mulai) / Tandai Selesai */}
+        {!isStarted ? (
+          <Pressable
+            onPress={() => {
+              void handleStart();
+            }}
+            disabled={starting}
+            style={({ pressed }) => [
+              styles.completeButton,
+              starting && styles.completeButtonDisabled,
+              pressed && styles.completeButtonPressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={`Mulai belajar ${skillName}`}
+          >
+            <ThemedText style={styles.completeButtonText}>
+              {starting ? "Memulai..." : "Mulai Belajar"}
+            </ThemedText>
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={() => {
+              void handleComplete();
+            }}
+            disabled={activeMaterial === null}
+            style={({ pressed }) => [
+              styles.completeButton,
+              activeMaterial === null && styles.completeButtonDisabled,
+              pressed && styles.completeButtonPressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Tandai materi aktif selesai"
+          >
+            <ThemedText style={styles.completeButtonText}>
+              {isFinished ? "Semua Materi Selesai" : "Tandai Selesai"}
+            </ThemedText>
+          </Pressable>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -509,5 +541,16 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontWeight: "600",
     color: learningColors.text,
+  },
+  notFoundWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  backLink: {
+    color: colors.primary,
+    fontSize: 15,
+    fontWeight: "600",
   },
 });

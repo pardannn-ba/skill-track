@@ -1,5 +1,6 @@
-import { ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { colors } from "@/constants/theme";
 import ProgressBar from "@/components/progress-bar";
 import SubjectIcon from "@/components/subject-icon";
@@ -9,40 +10,93 @@ import {
   BookIcon,
   ChevronRightIcon,
 } from "@/components/icons";
-
-/** Data dashboard — dipisah agar komponen tetap reusable. */
-const dashboardData = {
-  greeting: "Selamat pagi! ☀️",
-  subtitle: "Lanjutkan progresmu",
-  mainCourse: {
-    title: "Web Development",
-    subtitle: "3 dari 5 materi selesai",
-    progressPercent: 60,
-  },
-  skills: [
-    { icon: "html", title: "HTML", subtitle: "4 dari 5 materi", percent: 80 },
-    { icon: "css", title: "CSS", subtitle: "1 dari 4 materi", percent: 25 },
-    { icon: "uiux", title: "UI/UX Design", subtitle: "0 dari 6 materi", percent: 0 },
-  ] as const,
-  continueLearning: {
-    icon: "html" as const,
-    title: "HTML - Heading & Paragraf",
-    subtitle: "Materi ke-2 dari 5",
-  },
-};
+import { computeSummary, nextOpenMaterial, startedPaths, type ProgressState } from "@/data/progress-store";
+import { useProgressState } from "@/hooks/use-progress-state";
+import { computeProgress } from "@/data/learning-path";
 
 const bottomEdges: Edge[] = ["left", "right", "bottom"];
-const topEdges: Edge[] = ["top", "left", "right"];
 
+/**
+ * Dashboard Home — menampilkan data aktual dari sumber data tunggal:
+ * statistik keseluruhan, daftar skill aktif, dan materi terakhir yang
+ * belum selesai. Skill yang belum dimulai tidak ditampilkan.
+ */
 export default function Dashboard() {
-  const { mainCourse, skills, continueLearning } = dashboardData;
+  const router = useRouter();
+  const progress: ProgressState | null = useProgressState();
+
+  const summary = computeSummary(progress ?? { started: [], completed: [] });
+  const paths = progress ? startedPaths(progress) : [];
+
+  /** Kartu skill aktif: HTML & CSS berdampingan, sisanya full-width. */
+  const activeSkillCards = paths.slice(0, 2).map((path) => {
+    const percent = computeProgress(path.materials, progress?.completed ?? []);
+    const next = nextOpenMaterial(path, progress ?? { started: [], completed: [] });
+    return {
+      id: path.skillId,
+      icon: path.icon,
+      title: path.skillName,
+      subtitle:
+        percent >= 100
+          ? "Selesai"
+          : next
+            ? `${countDone(progress, path.skillId)} dari ${path.materials.length} materi`
+            : `${path.materials.length} materi`,
+      percent,
+    };
+  });
+  const extraSkillCards = paths.slice(2).map((path) => {
+    const percent = computeProgress(path.materials, progress?.completed ?? []);
+    return {
+      id: path.skillId,
+      icon: path.icon,
+      title: path.skillName,
+      subtitle:
+        percent >= 100
+          ? "Selesai"
+          : `${countDone(progress, path.skillId)} dari ${path.materials.length} materi`,
+      percent,
+    };
+  });
+
+  /** Kartu Lanjutkan Belajar: materi terakhir yang belum selesai. */
+  const continueTarget = (() => {
+    if (!progress) {
+      return null;
+    }
+    for (const path of paths) {
+      const next = nextOpenMaterial(path, progress);
+      if (next) {
+        const doneCount = countDone(progress, path.skillId);
+        return {
+          skillId: path.skillId,
+          icon: path.icon,
+          title: `${path.skillName} - ${next.title}`,
+          subtitle: `Materi ke-${doneCount + 1} dari ${path.materials.length}`,
+        };
+      }
+    }
+    return null;
+  })();
+
+  const openContinue = () => {
+    if (!continueTarget) {
+      router.push("/(tabs)/explore");
+      return;
+    }
+    router.push({
+      pathname: "/learning-path",
+      params: { skillId: continueTarget.skillId, from: "home" },
+    });
+  };
+
   return (
     <SafeAreaView edges={bottomEdges} style={styles.safe}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <SafeAreaView edges={topEdges} style={styles.safeHeader}>
+        <SafeAreaView edges={["top", "left", "right"]} style={styles.safeHeader}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerText}>
@@ -53,94 +107,169 @@ export default function Dashboard() {
           </View>
         </SafeAreaView>
 
-        {/* Kartu Web Development */}
-        <View style={styles.mainCard}>
-          <View style={styles.mainCardRow}>
-            <View style={styles.mainIconBox}>
-              <BookIcon size={26} color={colors.text} />
-            </View>
-            <View style={styles.mainCardInfo}>
-              <ThemedText variant="cardTitle">Web Development</ThemedText>
-              <ThemedText variant="caption">
-                {mainCourse.subtitle}
-              </ThemedText>
-            </View>
-            <ChevronRightIcon size={22} color={colors.text} />
-          </View>
-          <View style={styles.mainCardProgress}>
-            <View style={styles.progressRow}>
-              <View style={styles.progressTrackWrap}>
-                <ProgressBar value={mainCourse.progressPercent} />
+        {/* Kartu Web Development — ringkas progres keseluruhan */}
+        <Pressable
+          onPress={() => router.push("/(tabs)/progress")}
+          accessibilityRole="button"
+          accessibilityLabel="Buka halaman Progress"
+        >
+          <View style={styles.mainCard}>
+            <View style={styles.mainCardRow}>
+              <View style={styles.mainIconBox}>
+                <BookIcon size={26} color={colors.text} />
               </View>
-              <ThemedText variant="stat">
-                {mainCourse.progressPercent}%
-              </ThemedText>
+              <View style={styles.mainCardInfo}>
+                <ThemedText variant="cardTitle">Belajar Kamu</ThemedText>
+                <ThemedText variant="caption">
+                  {summary.activeSkills > 0
+                    ? `${summary.completedMaterials} dari ${summary.totalMaterials} materi selesai`
+                    : "Belum ada skill yang dimulai"}
+                </ThemedText>
+              </View>
+              <ChevronRightIcon size={22} color={colors.text} />
+            </View>
+            <View style={styles.mainCardProgress}>
+              <View style={styles.progressRow}>
+                <View style={styles.progressTrackWrap}>
+                  <ProgressBar value={summary.overallPercent} />
+                </View>
+                <ThemedText variant="stat">
+                  {summary.overallPercent}%
+                </ThemedText>
+              </View>
             </View>
           </View>
-        </View>
+        </Pressable>
 
         {/* Skill Kamu */}
         <View style={styles.sectionHeader}>
           <ThemedText variant="cardTitle">Skill Kamu</ThemedText>
-          <ThemedText variant="caption" style={styles.linkText}>
-            Lihat semua
-          </ThemedText>
+          <Pressable
+            hitSlop={6}
+            onPress={() => router.push("/(tabs)/explore")}
+            accessibilityRole="button"
+            accessibilityLabel="Lihat semua skill"
+          >
+            <ThemedText variant="caption" style={styles.linkText}>
+              Jelajahi Skill
+            </ThemedText>
+          </Pressable>
         </View>
-        {/* HTML & CSS berdampingan */}
-        <View style={styles.skillGrid}>
-          {skills.slice(0, 2).map((skill) => (
-            <View key={skill.title} style={styles.skillCard}>
-              <SubjectIcon name={skill.icon} />
-              <ThemedText variant="cardTitle" style={styles.skillTitle}>
-                {skill.title}
-              </ThemedText>
-              <ThemedText variant="caption">{skill.subtitle}</ThemedText>
-              <View style={styles.skillProgressRow}>
-                <View style={styles.skillProgressTrack}>
-                  <ProgressBar value={skill.percent} height={6} />
-                </View>
-                <ThemedText variant="caption">{skill.percent}%</ThemedText>
-              </View>
+        {paths.length === 0 ? (
+          /* Belum ada skill dimulai: ajakan menjelajah, layout tetap sama */
+          <View style={styles.skillCard}>
+            <ThemedText variant="cardTitle">Belum ada skill</ThemedText>
+            <ThemedText variant="caption">
+              Mulai belajar dengan menjelajahi skill di halaman Explore.
+            </ThemedText>
+          </View>
+        ) : (
+          <>
+            {/* Dua skill aktif pertama berdampingan */}
+            <View style={styles.skillGrid}>
+              {activeSkillCards.map((skill) => (
+                <Pressable
+                  key={skill.id}
+                  style={styles.skillCard}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/learning-path",
+                      params: { skillId: skill.id, from: "home" },
+                    })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={`Buka ${skill.title}`}
+                >
+                  <SubjectIcon name={skill.icon} />
+                  <ThemedText variant="cardTitle" style={styles.skillTitle}>
+                    {skill.title}
+                  </ThemedText>
+                  <ThemedText variant="caption">{skill.subtitle}</ThemedText>
+                  <View style={styles.skillProgressRow}>
+                    <View style={styles.skillProgressTrack}>
+                      <ProgressBar value={skill.percent} height={6} />
+                    </View>
+                    <ThemedText variant="caption">{skill.percent}%</ThemedText>
+                  </View>
+                </Pressable>
+              ))}
             </View>
-          ))}
-        </View>
 
-        {/* Kartu UI/UX full-width */}
-        <View style={[styles.skillCard, styles.uiuxCard]}>
-          <View style={styles.uiuxRow}>
-            <SubjectIcon name="uiux" />
-            <View style={styles.uiuxInfo}>
-              <ThemedText variant="cardTitle">UI/UX Design</ThemedText>
-              <ThemedText variant="caption">0 dari 6 materi</ThemedText>
-            </View>
-          </View>
-          <View style={styles.skillProgressRow}>
-            <View style={styles.skillProgressTrack}>
-              <ProgressBar value={0} height={6} />
-            </View>
-            <ThemedText variant="caption">0%</ThemedText>
-          </View>
-        </View>
+            {/* Skill aktif lainnya: kartu full-width */}
+            {extraSkillCards.map((skill) => (
+              <Pressable
+                key={skill.id}
+                style={[styles.skillCard, styles.uiuxCard]}
+                onPress={() =>
+                  router.push({
+                    pathname: "/learning-path",
+                    params: { skillId: skill.id, from: "home" },
+                  })
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`Buka ${skill.title}`}
+              >
+                <View style={styles.uiuxRow}>
+                  <SubjectIcon name={skill.icon} />
+                  <View style={styles.uiuxInfo}>
+                    <ThemedText variant="cardTitle">{skill.title}</ThemedText>
+                    <ThemedText variant="caption">{skill.subtitle}</ThemedText>
+                  </View>
+                </View>
+                <View style={styles.skillProgressRow}>
+                  <View style={styles.skillProgressTrack}>
+                    <ProgressBar value={skill.percent} height={6} />
+                  </View>
+                  <ThemedText variant="caption">{skill.percent}%</ThemedText>
+                </View>
+              </Pressable>
+            ))}
+          </>
+        )}
 
         {/* Lanjutkan Belajar */}
         <View style={[styles.sectionHeader, styles.continueHeader]}>
           <ThemedText variant="cardTitle">Lanjutkan Belajar</ThemedText>
         </View>
-        <View style={styles.continueCard}>
-          <View style={styles.mainIconBox}>
-            <BookIcon size={26} color={colors.text} />
+        <Pressable
+          onPress={openContinue}
+          accessibilityRole="button"
+          accessibilityLabel="Lanjutkan belajar materi terakhir"
+        >
+          <View style={styles.continueCard}>
+            <View style={styles.mainIconBox}>
+              <BookIcon size={26} color={colors.text} />
+            </View>
+            <View style={styles.continueInfo}>
+              <ThemedText variant="cardTitle" numberOfLines={1}>
+                {continueTarget
+                  ? continueTarget.title
+                  : "Belum ada materi berjalan"}
+              </ThemedText>
+              <ThemedText variant="caption" numberOfLines={1}>
+                {continueTarget
+                  ? continueTarget.subtitle
+                  : "Jelajahi skill untuk mulai belajar"}
+              </ThemedText>
+            </View>
+            <ChevronRightIcon size={22} color={colors.textSecondary} />
           </View>
-          <View style={styles.continueInfo}>
-            <ThemedText variant="cardTitle">
-              {continueLearning.title}
-            </ThemedText>
-            <ThemedText variant="caption">{continueLearning.subtitle}</ThemedText>
-          </View>
-          <ChevronRightIcon size={22} color={colors.textSecondary} />
-        </View>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+/** Jumlah materi selesai untuk satu skill aktif (dari store, tanpa duplikat). */
+function countDone(progress: ProgressState | null, skillId: string): number {
+  const completed = progress?.completed ?? [];
+  const seen = new Set<string>();
+  for (const id of completed) {
+    if (id.startsWith(`${skillId}-`)) {
+      seen.add(id);
+    }
+  }
+  return seen.size;
 }
 
 const styles = StyleSheet.create({

@@ -22,7 +22,7 @@ export type LearningPath = {
 };
 
 /** Learning Path HTML — halaman detail skill pada screenshot referensi. */
-export const htmlLearningPath: LearningPath = {
+const htmlPath: LearningPath = {
   skillId: "html",
   skillName: "HTML",
   subtitle: "Jalur belajar pemula",
@@ -82,7 +82,214 @@ export const htmlLearningPath: LearningPath = {
   ],
 };
 
-/** Kunci penyimpanan progres Learning Path (AsyncStorage). */
+/** Learning Path CSS. */
+const cssPath: LearningPath = {
+  skillId: "css",
+  skillName: "CSS",
+  subtitle: "Jalur belajar pemula",
+  level: "Pemula",
+  icon: "css",
+  materials: [
+    {
+      id: "css-1",
+      title: "Pengenalan CSS",
+      description: "Apa itu CSS dan fungsinya",
+      points: [
+        "Pengertian CSS dan hubungannya dengan HTML",
+        "Cara menulis CSS: inline, internal, eksternal",
+        "Sintaks selector, property, dan value",
+      ],
+    },
+    {
+      id: "css-2",
+      title: "Selector & Warna",
+      description: "Memilih elemen dan memberi warna",
+      points: [
+        "Selector tag, class, dan id",
+        "Warna dengan nama, hex, dan rgb",
+        "Background dan text color",
+      ],
+    },
+    {
+      id: "css-3",
+      title: "Box Model & Layout",
+      description: "Mengatur jarak dan ukuran",
+      points: [
+        "Padding, margin, dan border",
+        "Width, height, dan box-sizing",
+        "Display block, inline, dan inline-block",
+      ],
+    },
+    {
+      id: "css-4",
+      title: "Flexbox & Responsif",
+      description: "Layout modern dan media query",
+      points: [
+        "Flex container dan flex item",
+        "justify-content dan align-items",
+        "Media query untuk layar kecil",
+      ],
+    },
+  ],
+};
+
+/** Learning Path UI/UX Design. */
+const uiuxPath: LearningPath = {
+  skillId: "uiux",
+  skillName: "UI/UX Design",
+  subtitle: "Jalur belajar pemula",
+  level: "Pemula",
+  icon: "uiux",
+  materials: [
+    {
+      id: "uiux-1",
+      title: "Pengenalan UI/UX",
+      description: "Apa itu UI dan UX",
+      points: [
+        "Perbedaan UI dan UX",
+        "Peran designer dalam produk digital",
+        "Proses desain dari riset hingga uji coba",
+      ],
+    },
+    {
+      id: "uiux-2",
+      title: "Riset Pengguna",
+      description: "Mengenal kebutuhan pengguna",
+      points: [
+        "Wawancara dan survei pengguna",
+        "User persona sederhana",
+        "Menyusun masalah utama pengguna",
+      ],
+    },
+    {
+      id: "uiux-3",
+      title: "Wireframe",
+      description: "Sketsa struktur halaman",
+      points: [
+        "Low-fidelity vs high-fidelity",
+        "Menyusun layout dengan wireframe",
+        "Hierarki informasi pada halaman",
+      ],
+    },
+    {
+      id: "uiux-4",
+      title: "Desain Visual",
+      description: "Warna, tipografi, dan spacing",
+      points: [
+        "Memilih palet warna yang konsisten",
+        "Tipografi dan ukuran teks",
+        "Spacing dan grid yang rapi",
+      ],
+    },
+    {
+      id: "uiux-5",
+      title: "Prototype",
+      description: "Desain yang bisa dicoba",
+      points: [
+        "Membuat alur navigasi antar layar",
+        "Interaksi sederhana pada prototype",
+        "Menyiapkan prototype untuk diuji",
+      ],
+    },
+    {
+      id: "uiux-6",
+      title: "Usability Testing",
+      description: "Menguji desain ke pengguna",
+      points: [
+        "Menyusun skenario pengujian",
+        "Mengamati perilaku pengguna",
+        "Iterasi desain dari hasil pengujian",
+      ],
+    },
+  ],
+};
+
+/** Learning Path English. */
+const englishPath: LearningPath = {
+  skillId: "english",
+  skillName: "English",
+  subtitle: "Jalur belajar pemula",
+  level: "Pemula",
+  icon: "english",
+  materials: [
+    {
+      id: "english-1",
+      title: "Pengenalan Bahasa Inggris",
+      description: "Memulai belajar bahasa Inggris",
+      points: [
+        "Alfabet dan pelafalan dasar",
+        "Sapaan dan perkenalan diri",
+        "Kata benda dan kata kerja sederhana",
+      ],
+    },
+    {
+      id: "english-2",
+      title: "Vocabulary Dasar",
+      description: "Menambah jumlah kata",
+      points: [
+        "Kata sehari-hari: rumah, sekolah, keluarga",
+        "Angka, hari, dan bulan",
+        "Cara mencatat kosakata baru",
+      ],
+    },
+    {
+      id: "english-3",
+      title: "Grammar Sederhana",
+      description: "Menyusun kalimat benar",
+      points: [
+        "Kalimat simple present",
+        "Artikel a, an, dan the",
+        "Kata ganti I, you, we, they",
+      ],
+    },
+    {
+      id: "english-4",
+      title: "Percakapan Sehari-hari",
+      description: "Berbicara dalam situasi umum",
+      points: [
+        "Bertanya dan menjawab sederhana",
+        "Berbelanja dan memesan makanan",
+        "Menyapa dengan sopan",
+      ],
+    },
+    {
+      id: "english-5",
+      title: "Listening & Reading",
+      description: "Melatih pendengaran dan membaca",
+      points: [
+        "Mendengar dialog pendek",
+        "Membaca teks sederhana",
+        "Menjawab pertanyaan pemahaman",
+      ],
+    },
+  ],
+};
+
+/** Semua learning path yang tersedia di aplikasi (urut seperti skillsData). */
+export const learningPaths: LearningPath[] = [htmlPath, cssPath, uiuxPath, englishPath];
+
+/** Alias lama agar file lain yang memakai htmlLearningPath tetap bekerja. */
+export const htmlLearningPath: LearningPath = htmlPath;
+
+/** Ambil learning path berdasarkan id skill; null jika id tidak dikenal. */
+export function getLearningPath(skillId: string): LearningPath | null {
+  return learningPaths.find((path) => path.skillId === skillId) ?? null;
+}
+
+/** Cari materi berdasarkan id unik di seluruh skill. */
+export function findMaterialById(
+  materialId: string,
+): { path: LearningPath; index: number; material: LearningMaterial } | null {
+  for (const path of learningPaths) {
+    const index = path.materials.findIndex((material) => material.id === materialId);
+    if (index >= 0) {
+      return { path, index, material: path.materials[index] };
+    }
+  }
+  return null;
+}
+
+/** Kunci penyimpanan progres Learning Path HTML (kompatibilitas data lama). */
 export const learningStorageKey = "@skill-track/learning-path/html/completed";
 
 /**
@@ -143,24 +350,4 @@ export function computeProgress(
   return Math.round(
     (countCompleted(materials, completedIds) / materials.length) * 100,
   );
-}
-
-/**
- * Tandai materi yang sedang aktif sebagai selesai.
- * Mengembalikan salinan daftar baru; id tidak pernah duplikat dan
- * tidak ada materi terkunci yang bisa diselesaikan.
- */
-export function completeActiveMaterial(
-  materials: readonly LearningMaterial[],
-  completedIds: readonly string[],
-): string[] {
-  const activeIndex = getActiveMaterialIndex(materials, completedIds);
-  const activeMaterial = activeIndex >= 0 ? materials[activeIndex] : undefined;
-  if (!activeMaterial) {
-    return [...completedIds];
-  }
-  if (completedIds.includes(activeMaterial.id)) {
-    return [...completedIds];
-  }
-  return [...completedIds, activeMaterial.id];
 }

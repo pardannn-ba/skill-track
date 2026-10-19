@@ -1,21 +1,48 @@
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ArrowLeft } from "lucide-react-native";
+import { ArrowLeft, Check } from "lucide-react-native";
 import { colors, learningColors } from "@/constants/theme";
-import { htmlLearningPath } from "@/data/learning-path";
+import { findMaterialById } from "@/data/learning-path";
+import {
+  completeMaterial,
+  loadProgress,
+  subscribeProgress,
+} from "@/data/progress-store";
+import { recordActivity } from "@/data/profile";
 import ThemedText from "@/components/themed-text";
 
 /**
  * Halaman detail materi Learning Path.
- * Dibuka dari baris materi aktif/selesai; materi terkunci tidak bisa dibuka.
+ * Dibuka dari baris materi aktif/selesai di Learning Path skill mana pun;
+ * materi terkunci tidak pernah bisa dibuka dari halaman Learning Path.
  */
 export default function MaterialDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { materials } = htmlLearningPath;
-  const index = materials.findIndex((material) => material.id === id);
-  const material = index >= 0 ? materials[index] : undefined;
+  const resolved = id ? findMaterialById(id) : null;
+  const material = resolved?.material ?? null;
+  const path = resolved?.path ?? null;
+  const index = resolved?.index ?? -1;
+
+  /** null = state belum dibaca; dipakai untuk status tombol selesai. */
+  const [isCompleted, setIsCompleted] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const refresh = (completed: string[]) => {
+      if (isMounted && material) {
+        setIsCompleted(completed.includes(material.id));
+      }
+    };
+    const unsubscribe = subscribeProgress((state) => refresh(state.completed));
+    void loadProgress().then((state) => refresh(state.completed));
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [material]);
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -25,7 +52,15 @@ export default function MaterialDetailScreen() {
     }
   };
 
-  if (!material) {
+  const handleComplete = async () => {
+    if (!material || isCompleted) {
+      return;
+    }
+    await completeMaterial(material.id);
+    await recordActivity(material.id);
+  };
+
+  if (!material || !path) {
     return (
       <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
         <View style={styles.notFoundWrap}>
@@ -57,7 +92,7 @@ export default function MaterialDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ThemedText variant="caption">
-          Materi {index + 1} dari {materials.length} · {htmlLearningPath.skillName}
+          Materi {index + 1} dari {path.materials.length} · {path.skillName}
         </ThemedText>
         <ThemedText style={styles.title}>{material.title}</ThemedText>
         <ThemedText variant="subtitle">{material.description}</ThemedText>
@@ -77,6 +112,38 @@ export default function MaterialDetailScreen() {
             </View>
           ))}
         </View>
+
+        {/* Tombol tandai selesai — menyimpan status materi ke store tunggal */}
+        <Pressable
+          onPress={() => {
+            void handleComplete();
+          }}
+          disabled={isCompleted !== true ? false : true}
+          style={({ pressed }) => [
+            styles.completeButton,
+            isCompleted === true && styles.completeButtonDone,
+            pressed && isCompleted !== true && styles.completeButtonPressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={
+            isCompleted === true
+              ? "Materi sudah selesai"
+              : "Tandai materi selesai"
+          }
+        >
+          {isCompleted === true ? (
+            <View style={styles.doneRow}>
+              <Check size={18} color={learningColors.success} strokeWidth={3} />
+              <ThemedText style={styles.completeButtonTextDone}>
+                Materi Selesai
+              </ThemedText>
+            </View>
+          ) : (
+            <ThemedText style={styles.completeButtonText}>
+              Tandai Selesai
+            </ThemedText>
+          )}
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -150,6 +217,39 @@ const styles = StyleSheet.create({
   pointText: {
     flex: 1,
     color: colors.text,
+  },
+  completeButton: {
+    marginTop: 22,
+    height: 54,
+    borderRadius: 14,
+    backgroundColor: learningColors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  completeButtonDone: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: learningColors.success,
+  },
+  completeButtonPressed: {
+    opacity: 0.85,
+  },
+  completeButtonText: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "600",
+    color: learningColors.text,
+  },
+  completeButtonTextDone: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "600",
+    color: learningColors.success,
+  },
+  doneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   notFoundWrap: {
     flex: 1,

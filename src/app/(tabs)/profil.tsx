@@ -15,7 +15,6 @@ import {
   avatarInitials,
   buildWeeklyActivity,
   computeProfileStats,
-  countActiveSkills,
   defaultUsername,
   loadUsername,
   readActivityTimestamps,
@@ -184,12 +183,12 @@ export default function Profil() {
   );
 
   const statsData: ProfileStats = useMemo(
-    () => stats ?? { completedMaterials: 0, totalMaterials: 0, overallPercent: 0, skills: [] },
+    () => stats ?? { completedMaterials: 0, totalMaterials: 0, overallPercent: 0, skills: [], activeSkills: 0 },
     [stats],
   );
 
-  /** Jumlah skill yang memiliki learning path aktif (bukan statistik statis). */
-  const activeSkillCount = countActiveSkills();
+  /** Jumlah skill yang benar-benar sudah dimulai (dari store tunggal). */
+  const activeSkillCount = statsData.activeSkills;
 
   const openSettings = () => {
     setNameDraft(username ?? defaultUsername);
@@ -206,13 +205,10 @@ export default function Profil() {
   };
 
   const openSkill = (skillId: string) => {
-    if (skillId === "html") {
-      router.push("/learning-path");
-      return;
-    }
+    // Semua kartu skill di Profil membuka Learning Path skill-nya.
     router.push({
-      pathname: "/skill-detail",
-      params: { id: skillId },
+      pathname: "/learning-path",
+      params: { skillId },
     });
   };
 
@@ -323,15 +319,21 @@ export default function Profil() {
               </ThemedText>
             </Pressable>
           </View>
-          {statsData.skills.map((skill) => (
-            <SkillRow
-              key={skill.id}
-              icon={skill.icon}
-              name={skill.name}
-              percent={skill.percent}
-              onPress={() => openSkill(skill.id)}
-            />
-          ))}
+          {statsData.skills.length === 0 ? (
+            <ThemedText variant="caption">
+              Belum ada skill yang dimulai. Mulai dari halaman Explore.
+            </ThemedText>
+          ) : (
+            statsData.skills.map((skill) => (
+              <SkillRow
+                key={skill.id}
+                icon={skill.icon}
+                name={skill.name}
+                percent={skill.percent}
+                onPress={() => openSkill(skill.id)}
+              />
+            ))
+          )}
         </View>
       </ScrollView>
 

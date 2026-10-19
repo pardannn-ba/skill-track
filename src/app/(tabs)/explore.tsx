@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   FlatList,
   StyleSheet,
@@ -9,19 +9,28 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
 import type { Skill, SkillCategory } from "@/data/skills";
 import { skillCategories, skillsData } from "@/data/skills";
+import { getLearningPath, computeProgress } from "@/data/learning-path";
+import {
+  startSkill,
+  type ProgressState,
+} from "@/data/progress-store";
+import { useProgressState } from "@/hooks/use-progress-state";
 import SearchBar from "@/components/search-bar";
 import CategoryFilter from "@/components/category-filter";
-import SkillCard from "@/components/skill-card";
+import SkillCard, { type SkillCardStatus } from "@/components/skill-card";
 import ThemedText from "@/components/themed-text";
 
 /**
- * Halaman Explore Skills: pencarian berdasarkan nama skill
- * (case-insensitive) + filter kategori yang bekerja bersamaan.
+ * Halaman Explore Skills: katalog seluruh skill dengan pencarian nama
+ * (case-insensitive) + filter kategori. Setiap kartu menampilkan status
+ * belajar dan tombol Mulai/Lanjutkan Belajar dari sumber data tunggal.
  */
 export default function ExploreScreen() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<"All" | SkillCategory>("All");
+  /** null = state belum dibaca dari storage. */
+  const progress: ProgressState | null = useProgressState();
 
   const filteredSkills = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -35,22 +44,54 @@ export default function ExploreScreen() {
     });
   }, [query, category]);
 
-  const openSkillDetail = (skill: Skill) => {
-    // Kartu HTML di Explore membuka halaman Learning Path (Detail Skill).
-    if (skill.id === "html") {
-      router.push("/learning-path");
-      return;
-    }
-    router.push({
-      pathname: "/skill-detail",
-      params: { id: skill.id },
-    });
-  };
+  const statusOf = useCallback(
+    (skill: Skill): { status: SkillCardStatus; percent: number } => {
+      const path = getLearningPath(skill.id);
+      const state = progress;
+      if (!path || !state || !state.started.includes(skill.id)) {
+        return { status: "not-started", percent: 0 };
+      }
+      const percent = computeProgress(path.materials, state.completed);
+      return {
+        status: percent >= 100 ? "completed" : "in-progress",
+        percent,
+      };
+    },
+    [progress],
+  );
+
+  /** Kartu ditekan: buka Learning Path skill (tanpa otomatis memulai). */
+  const openSkill = useCallback(
+    (skill: Skill) => {
+      router.push({
+        pathname: "/learning-path",
+        params: { skillId: skill.id },
+      });
+    },
+    [router],
+  );
+
+  /**
+   * Tombol Mulai Belajar: tambahkan skill ke daftar aktif (idempotent,
+   * tidak bisa duplikat) lalu buka Learning Path-nya. Tombol Lanjutkan
+   * pada skill aktif hanya membuka Learning Path (progres dipertahankan).
+   */
+  const handleAction = useCallback(
+    async (skill: Skill) => {
+      const { status } = statusOf(skill);
+      if (status === "not-started") {
+        await startSkill(skill.id);
+      }
+      openSkill(skill);
+    },
+    [statusOf, openSkill],
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={["left", "right"]}>
       <FlatList
         data={filteredSkills}
+        extraData={progress}
         keyExtractor={(skill) => skill.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -73,9 +114,20 @@ export default function ExploreScreen() {
             </View>
           </View>
         }
-        renderItem={({ item }) => (
-          <SkillCard skill={item} onPress={openSkillDetail} />
-        )}
+        renderItem={({ item }) => {
+          const { status, percent } = statusOf(item);
+          return (
+            <SkillCard
+              skill={item}
+              status={status}
+              percent={percent}
+              onPress={openSkill}
+              onAction={(selected) => {
+                void handleAction(selected);
+              }}
+            />
+          );
+        }}
         ItemSeparatorComponent={ListSeparator}
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
