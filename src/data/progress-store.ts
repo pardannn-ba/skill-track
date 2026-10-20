@@ -1,19 +1,43 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+/**
+ * Progress belajar disimpan HANYA di memori sesi (in-memory), tanpa
+ * AsyncStorage / database. Ketika aplikasi di-refresh, di-reload, atau
+ * dimulai ulang, progress kembali ke kondisi awal.
+ *
+ * Alasan: fitur login belum tersedia. Saat login dibuat nanti,
+ * penyimpanan permanen bisa diaktifkan kembali di modul ini saja
+ * (API halaman lain tidak perlu berubah).
+ *
+ * API tetap async supaya semua pemanggil (Home, Learning Path, Progress,
+ * Profil, Explore, hooks) tidak perlu diubah.
+ */
 import {
   findMaterialById,
   getLearningPath,
-  learningStorageKey,
   sanitizeCompleted,
   countCompleted,
 } from "@/data/learning-path";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 //
 // Sumber data utama: skill yang sudah dimulai + status materi tiap skill.
 // Persentase TIDAK disimpan — selalu dihitung dari materi selesai.
 //
 
-/** Kunci penyimpanan state progres utama (AsyncStorage). */
+/**
+ * Kunci lama yang dulu dipakai penyimpanan permanen. Tidak lagi dibaca
+ * atau ditulis; dibersihkan sekali saat sesi baru agar progress lama
+ * dari build sebelumnya tidak muncul kembali.
+ * (Dipertahankan sebagai export konstanta agar import lama tetap valid.)
+ */
 export const progressStorageKey = "@skill-track/progress/v1";
+
+/** Kunci penyimpanan legacy learning path HTML (kompatibilitas import). */
+export const legacyProgressKeys = [
+  progressStorageKey,
+  "@skill-track/learning-path/html/completed",
+  // Aktivitas mingguan juga data progress belajar — ikut dibersihkan.
+  "@skill-track/profile/activity",
+] as const;
 
 type StoredState = {
   /** Id skill yang sudah dimulai (urutan mulai). */
@@ -27,11 +51,8 @@ export type ProgressState = StoredState;
 
 const initialState: ProgressState = { started: [], completed: [] };
 
-/** Bentuk data lama: hanya html completed. Migrasi otomatis sekali. */
-const legacyHtmlKey = learningStorageKey;
-
-let cache: ProgressState | null = null;
-let cachePromise: Promise<ProgressState> | null = null;
+/** State sesi di memori — sumber tunggal selama aplikasi berjalan. */
+let cache: ProgressState = initialState;
 
 /** Listener dipanggil saat state berubah (untuk update antar halaman). */
 type Listener = (state: ProgressState) => void;
@@ -51,102 +72,44 @@ function notify(state: ProgressState) {
   }
 }
 
-/** Sanitasi data mentah dari storage menjadi state valid. */
-function toValidState(value: unknown): ProgressState {
-  if (typeof value !== "object" || value === null) {
-    return initialState;
+// Bersihkan sisa key permanen dari build lama (sekali per sesi) supaya
+// progress lama tidak pernah muncul kembali dari storage.
+let cleanupDone = false;
+async function cleanupLegacyStorage(): Promise<void> {
+  if (cleanupDone) {
+    return;
   }
-  const raw = value as { started?: unknown; completed?: unknown };
-  const started = Array.isArray(raw.started)
-    ? raw.started.filter((id): id is string => typeof id === "string")
-    : [];
-  const completed = Array.isArray(raw.completed)
-    ? raw.completed.filter((id): id is string => typeof id === "string")
-    : [];
-  return {
-    // Hanya skill yang punya learning path yang boleh tersimpan.
-    started: started.filter((id) => getLearningPath(id) !== null),
-    completed: [...new Set(completed)],
-  };
+  cleanupDone = true;
+  try {
+    await AsyncStorage.multiRemove([...legacyProgressKeys]);
+  } catch {
+    // Gagal membersihkan tidak memengaruhi sesi in-memory.
+  }
 }
 
-/** Baca state tersimpan; sekali load lalu dipakai ulang dari cache. */
+/**
+ * Baca state progres sesi ini. Selalu diselesaikan secara async agar
+ * pemanggil yang sudah awaits tetap berjalan; datanya dari memori.
+ */
 export async function loadProgress(): Promise<ProgressState> {
-  if (cache) {
-    return cache;
-  }
-  if (!cachePromise) {
-    cachePromise = (async () => {
-      try {
-        // Migrasi data lama (learning path HTML saja) ke format baru.
-        const [mainRaw, legacyRaw] = await AsyncStorage.multiGet([
-          progressStorageKey,
-          legacyHtmlKey,
-        ]);
-        const mainState = toValidState(
-          mainRaw[1] ? JSON.parse(mainRaw[1]) : undefined,
-        );
-        let legacyCompleted: string[] = [];
-        if (legacyRaw[1]) {
-          try {
-            const parsed: unknown = JSON.parse(legacyRaw[1]);
-            if (Array.isArray(parsed)) {
-              const htmlPath = getLearningPath("html");
-              legacyCompleted = htmlPath
-                ? sanitizeCompleted(
-                    htmlPath.materials,
-                    parsed.filter((v): v is string => typeof v === "string"),
-                  )
-                : [];
-            }
-          } catch {
-            legacyCompleted = [];
-          }
-        }
-        const merged: ProgressState = {
-          // Jika sudah ada state baru, pakai itu; legacy hanya menambah skill.
-          started: mainState.started.length
-            ? mainState.started
-            : legacyCompleted.length > 0
-              ? ["html"]
-              : [],
-          completed: [
-            ...new Set([...legacyCompleted, ...mainState.completed]),
-          ],
-        };
-        cache = merged;
-        return merged;
-      } catch {
-        // Gagal membaca = mulai dari state kosong (pengguna baru).
-        cache = initialState;
-        return initialState;
-      } finally {
-        cachePromise = null;
-      }
-    })();
-  }
-  return cachePromise;
+  await cleanupLegacyStorage();
+  return cache;
 }
 
-/** Tulis state ke AsyncStorage dan broadcast ke listener. */
-async function persist(next: ProgressState): Promise<ProgressState> {
+/** Terapkan state baru ke memori dan broadcast ke listener. */
+function applyState(next: ProgressState): ProgressState {
   cache = next;
   notify(next);
-  try {
-    await AsyncStorage.setItem(progressStorageKey, JSON.stringify(next));
-  } catch {
-    // Gagal menulis tidak boleh merusak UI; cache tetap dipakai.
-  }
   return next;
 }
 
 /** Mulai sebuah skill (idempotent); return state terbaru. */
 export async function startSkill(skillId: string): Promise<ProgressState> {
-  const state = await loadProgress();
-  if (!getLearningPath(skillId) || state.started.includes(skillId)) {
-    return state;
+  await cleanupLegacyStorage();
+  if (!getLearningPath(skillId) || cache.started.includes(skillId)) {
+    return cache;
   }
-  return persist({ ...state, started: [...state.started, skillId] });
+  return applyState({ ...cache, started: [...cache.started, skillId] });
 }
 
 /**
@@ -167,36 +130,44 @@ export async function completeMaterial(materialId: string): Promise<ProgressStat
   if (state.completed.includes(materialId)) {
     return state;
   }
-  return persist({ ...state, completed: [...state.completed, materialId] });
+  return applyState({
+    ...state,
+    completed: [...state.completed, materialId],
+  });
 }
 
-/** Batalkan penyelesaian satu materi (dipakai uji/sinkron, jarang diperlukan). */
+/** Batalkan penyelesaian satu materi (jarang diperlukan). */
 export async function uncompleteMaterial(materialId: string): Promise<ProgressState> {
   const state = await loadProgress();
   if (!state.completed.includes(materialId)) {
     return state;
   }
-  return persist({
+  return applyState({
     ...state,
     completed: state.completed.filter((id) => id !== materialId),
   });
 }
 
-/** Hapus seluruh data progres (fitur reset/debug). */
+/**
+ * Hapus seluruh progress sesi. Dipakai uji/debug dipakai program;
+ * dipanggil juga saat pemanggil ingin memulai sesi bersih.
+ */
 export async function resetProgress(): Promise<void> {
-  cache = initialState;
-  notify(initialState);
-  try {
-    await AsyncStorage.removeItem(progressStorageKey);
-    await AsyncStorage.removeItem(legacyHtmlKey);
-  } catch {
-    // Abaikan; cache sudah baru.
-  }
+  await cleanupLegacyStorage();
+  applyState({ started: [], completed: [] });
 }
 
 /** Cari learning path + materi berdasarkan id materi. */
 export function resolveMaterial(materialId: string) {
   return findMaterialById(materialId);
+}
+
+/** Validasi/bersihkan daftar id terhadap materi (helper reuse). */
+export function sanitizeSessionMaterials(
+  path: NonNullable<ReturnType<typeof getLearningPath>>,
+  ids: readonly string[],
+): string[] {
+  return sanitizeCompleted(path.materials, ids);
 }
 
 //

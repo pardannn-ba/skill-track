@@ -1,4 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// Catatan penyimpanan: activity progress belajar kini SESI (memori),
+// sedangkan username tetap persisten via AsyncStorage karena bukan
+// bagian dari progress belajar.
 import {
   computeProgress,
   getLearningPath,
@@ -28,56 +32,34 @@ export const userRole = "Pelajar";
 export const avatarInitials = "AS";
 
 /**
- * Riwayat aktivitas belajar: daftar timestamp (ISO) dari setiap
- * penyelesaian materi. Tambah/jam tetap tersimpan setelah app ditutup.
+ * Riwayat aktivitas belajar: daftar timestamp dari setiap penyelesaian
+ * materi SELAMA SESI INI. Disimpan di memori (tanpa AsyncStorage), jadi
+ * hilang ketika aplikasi di-reload — konsisten dengan progress sesi.
  */
-const activityKey = "@skill-track/profile/activity";
+let sessionActivity: { timestamp: number; materialId: string }[] = [];
 
 //
-// Aktivitas belajar
+// Aktivitas belajar (sesi)
 //
 
-/** Catat satu aktivitas (penyelesaian materi) ke AsyncStorage. Idempotent per id. */
+/** Catat satu aktivitas (penyelesaian materi) ke memori. Idempotent per id. */
 export async function recordActivity(materialId: string): Promise<void> {
-  try {
-    const stored = await readActivityTimestamps();
-    // Idempoten: aktivitas untuk materi yang sama tidak dicatat dua kali
-    // (mencegah grafik mendadak naik dua kali untuk satu materi yang sama).
-    if (stored.some((entry) => entry.materialId === materialId)) {
-      return;
-    }
-    const next = [...stored, { timestamp: Date.now(), materialId }];
-    await AsyncStorage.setItem(activityKey, JSON.stringify(next));
-  } catch {
-    // Gagal menyimpan aktivitas tidak boleh menggagalkan penyelesaian materi.
+  // Idempoten: aktivitas untuk materi yang sama tidak dicatat dua kali
+  // (mencegah grafik mendadak naik dua kali untuk satu materi yang sama).
+  if (sessionActivity.some((entry) => entry.materialId === materialId)) {
+    return;
   }
+  sessionActivity = [
+    ...sessionActivity,
+    { timestamp: Date.now(), materialId },
+  ];
 }
 
-/** Baca semua entry aktivitas dari AsyncStorage. Gagal = kosong. */
+/** Baca semua entry aktivitas sesi ini (terurut waktu naik). */
 export async function readActivityTimestamps(): Promise<
   { timestamp: number; materialId: string }[]
 > {
-  try {
-    const raw = await AsyncStorage.getItem(activityKey);
-    if (!raw) {
-      return [];
-    }
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed
-      .filter(
-        (entry): entry is { timestamp: number; materialId: string } =>
-          typeof entry === "object" &&
-          entry !== null &&
-          typeof (entry as { timestamp?: unknown }).timestamp === "number" &&
-          typeof (entry as { materialId?: unknown }).materialId === "string",
-      )
-      .sort((a, b) => a.timestamp - b.timestamp);
-  } catch {
-    return [];
-  }
+  return [...sessionActivity].sort((a, b) => a.timestamp - b.timestamp);
 }
 
 /**

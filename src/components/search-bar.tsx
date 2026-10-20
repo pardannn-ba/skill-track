@@ -1,4 +1,4 @@
-import { StyleSheet, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { Search, X } from "lucide-react-native";
 import { colors } from "@/constants/theme";
 
@@ -31,9 +31,15 @@ export default function SearchBar({
         // suppressHighlighting tidak ada — cukup biarkan default
       />
       {value.length > 0 ? (
-        <View style={styles.clearButton}>
-          <X size={16} color={colors.textSecondary} onPress={() => onChangeText("")} />
-        </View>
+        <Pressable
+          onPress={() => onChangeText("")}
+          hitSlop={8}
+          style={styles.clearButton}
+          accessibilityRole="button"
+          accessibilityLabel="Hapus teks pencarian"
+        >
+          <X size={16} color={colors.textSecondary} />
+        </Pressable>
       ) : null}
     </View>
   );

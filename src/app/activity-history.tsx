@@ -78,7 +78,11 @@ export default function ActivityHistoryScreen() {
             <ThemedText variant="caption">{total} aktivitas</ThemedText>
           </View>
           <View style={styles.chartRow}>
-            {weekly.map((day, index) => (
+            {weekly.map((day, index) => {
+              // Skala dinamis: relatif terhadap hari teraktif agar batang
+              // tidak pernah meluap keluar area kartu (bug tinggi > track).
+              const scaleMax = Math.max(BAR_SCALE_MAX, ...weekly.map((d) => d.count), day.count);
+              return (
               <View key={`${day.label}-${index}`} style={styles.barColumn}>
                 <View style={styles.barTrack}>
                   <View
@@ -89,7 +93,9 @@ export default function ActivityHistoryScreen() {
                           day.count > 0
                             ? Math.max(
                                 10,
-                                Math.round((day.count / 5) * BAR_MAX_HEIGHT),
+                                Math.round(
+                                  (Math.min(day.count, scaleMax) / scaleMax) * BAR_MAX_HEIGHT,
+                                ),
                               )
                             : 6,
                       },
@@ -100,7 +106,8 @@ export default function ActivityHistoryScreen() {
                   {day.label}
                 </ThemedText>
               </View>
-            ))}
+              );
+            })}
           </View>
         </View>
 
@@ -141,6 +148,8 @@ export default function ActivityHistoryScreen() {
 
 /** Tinggi maksimum batang — sama dengan halaman Profil agar konsisten. */
 const BAR_MAX_HEIGHT = 56;
+/** Jumlah aktivitas yang dianggap penuh pada skala; hari di atasnya digambar penuh. */
+const BAR_SCALE_MAX = 4;
 
 const styles = StyleSheet.create({
   safe: {

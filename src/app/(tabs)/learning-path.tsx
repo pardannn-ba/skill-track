@@ -67,7 +67,8 @@ const codeFontFamily = Platform.select({
  * kecuali untuk skill English yang memakai detail bahasa khusus
  * (EnglishMaterialDetail) sesuai jenis kontennya.
  * menekan kartunya lagi menutup detail. Progress dihitung dari jumlah
- * materi selesai (0%, 20%, 40%, ... 100%) dan disimpan di AsyncStorage.
+ * materi selesai (0%, 20%, 40%, ... 100%) dan disimpan sementara di
+ * memori sesi (hilang saat aplikasi di-reload).
  */
 export default function LearningPathScreen() {
   const router = useRouter();
@@ -124,10 +125,18 @@ export default function LearningPathScreen() {
   const isFinished = started !== null && isStarted && activeMaterial === null;
 
   const handleBack = () => {
-    // Halaman ini dibuka dari tab Explore/Progress/Home/Profil;
-    // push ke route tab berperilaku seperti NAVIGATE (tanpa riwayat pop),
-    // jadi back yang deterministik: kembali ke tab asal.
-    router.replace(from === "progress" || from === "home" ? "/progress" : "/explore");
+    // Halaman ini hidup di dalam (tabs), jadi back yang deterministik:
+    // kembali ke tab asalnya. `from` dikirim oleh halaman asal
+    // (progress/home/explore/profil), default explore.
+    const target =
+      from === "progress"
+        ? "/(tabs)/progress"
+        : from === "home"
+          ? "/"
+          : from === "profile"
+            ? "/(tabs)/profil"
+            : "/(tabs)/explore";
+    router.replace(target);
   };
 
   const handleStart = async () => {
@@ -462,7 +471,9 @@ export default function LearningPathScreen() {
         ) : null}
 
         {/* Tombol bawah: Mulai Belajar (sebelum mulai) / Tandai Selesai
-            untuk materi aktif saat tidak ada detail terbuka */}
+            untuk materi aktif. Disembunyikan saat ada detail materi terbuka
+            agar tombol tidak tampil ganda dan tidak menyelesaikan materi
+            yang berbeda dari yang sedang dilihat pengguna. */}
         {!isStarted ? (
           <Pressable
             onPress={() => {
@@ -482,7 +493,7 @@ export default function LearningPathScreen() {
               {starting ? "Memulai..." : "Mulai Belajar"}
             </ThemedText>
           </Pressable>
-        ) : (
+        ) : openId === null ? (
           <Pressable
             onPress={() => {
               void handleComplete();
@@ -501,7 +512,7 @@ export default function LearningPathScreen() {
               {isFinished ? "Semua Materi Selesai" : "Tandai Selesai"}
             </ThemedText>
           </Pressable>
-        )}
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

@@ -6,8 +6,8 @@ import {
 } from "@/data/progress-store";
 
 /**
- * Hook untuk membaca state progres dari sumber data tunggal.
- * Membaca sekali saat mount (AsyncStorage), lalu tetap sinkron dengan
+ * Hook untuk membaca state progres dari sumber data tunggal (memori
+ * sesi). Membaca sekali saat mount, lalu tetap sinkron dengan
  * perubahan dari halaman lain melalui subscribeProgress.
  *
  * null = data belum selesai dibaca (halaman bisa tampil skeleton).

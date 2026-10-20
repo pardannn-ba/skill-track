@@ -43,6 +43,11 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 /** Tinggi maksimum batang grafik aktivitas. */
 const BAR_MAX_HEIGHT = 56;
+/**
+ * Jumlah aktivitas per hari yang dianggap "penuh" pada skala grafik.
+ * Hari dengan lebih dari ini tetap digambar penuh (tidak meluap).
+ */
+const BAR_SCALE_MAX = 4;
 
 /** Warna & ukuran kartu agar konsisten dengan screenshot referensi. */
 const statIconBox = {
@@ -94,13 +99,16 @@ function ProgressRing({ percent }: { percent: number }) {
   );
 }
 
-/** Satu batang grafik aktivitas mingguan. */
-function ActivityBar({ label, count, maxHeight }: { label: string; count: number; maxHeight: number }) {
-  // Tinggi proporsional, dengan minimum agar hari tanpa aktivitas
-  // tetap menampilkan titik kecil yang rapi.
+/**
+ * Satu batang grafik aktivitas mingguan. Tinggi proporsional terhadap
+ * aktivitas terbanyak dalam minggu itu (skala dinamis), dengan minimum
+ * agar hari tanpa aktivitas tetap menampilkan titik kecil yang rapi.
+ */
+function ActivityBar({ label, count, scaleMax }: { label: string; count: number; scaleMax: number }) {
+  const scale = scaleMax > 0 ? scaleMax : BAR_SCALE_MAX;
   const height =
     count > 0
-      ? Math.max(10, Math.round((count / 5) * maxHeight))
+      ? Math.max(10, Math.round((Math.min(count, scale) / scale) * BAR_MAX_HEIGHT))
       : 6;
   return (
     <View style={styles.barColumn}>
@@ -154,7 +162,7 @@ function SkillRow({
 
 export default function Profil() {
   const router = useRouter();
-  /** null = data belum dibaca dari AsyncStorage. */
+  /** null = data profil/progress sesi belum dibaca. */
   const [username, setUsername] = useState<string | null>(null);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [weekly, setWeekly] = useState<{ label: string; count: number }[]>([]);
@@ -162,7 +170,8 @@ export default function Profil() {
   const [nameDraft, setNameDraft] = useState("");
 
   const refresh = useCallback(async () => {
-    // Data di-load sekuensial dari AsyncStorage (cepat, lokal).
+    // Data di-load sekuensial dari store (username persisten;
+    // stats & aktivitas berasal dari sesi memori — cepat, lokal).
     const [storedName, profileStats, activity] = await Promise.all([
       loadUsername(),
       computeProfileStats(),
@@ -205,10 +214,11 @@ export default function Profil() {
   };
 
   const openSkill = (skillId: string) => {
-    // Semua kartu skill di Profil membuka Learning Path skill-nya.
+    // Semua kartu skill di Profil membuka Learning Path skill-nya;
+    // `from` dipakai Learning Path untuk kembali ke tab Profil.
     router.push({
       pathname: "/learning-path",
-      params: { skillId },
+      params: { skillId, from: "profile" },
     });
   };
 
@@ -298,7 +308,7 @@ export default function Profil() {
                 key={`${day.label}-${index}`}
                 label={day.label}
                 count={day.count}
-                maxHeight={BAR_MAX_HEIGHT}
+                scaleMax={Math.max(BAR_SCALE_MAX, ...weekly.map((d) => d.count))}
               />
             ))}
           </View>

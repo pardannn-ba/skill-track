@@ -1,4 +1,4 @@
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Svg, { Circle, type CircleProps } from "react-native-svg";
@@ -73,7 +73,15 @@ function SkillProgressCard({
   onPress: () => void;
 }) {
   return (
-    <View style={styles.skillCard}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.skillCard,
+        pressed && styles.skillCardPressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={`Lanjutkan belajar ${name}`}
+    >
       <View style={styles.skillCardRow}>
         <SubjectIcon name={iconOf(skillId)} size={48} />
         <View style={styles.skillCardInfo}>
@@ -95,17 +103,11 @@ function SkillProgressCard({
         </View>
         <ChevronRightIcon size={22} color={colors.textSecondary} />
       </View>
-      {/* Seluruh kartu dapat ditekan = Lanjutkan Belajar materi terakhir */}
-      {onPress ? (
-        <ThemedText
-          style={styles.continueHint}
-          onPress={onPress}
-          color={colors.primary}
-        >
-          Lanjutkan Belajar
-        </ThemedText>
-      ) : null}
-    </View>
+      {/* Hint lanjutkan belajar; seluruh kartu kini bisa ditekan */}
+      <ThemedText style={styles.continueHint} color={colors.primary}>
+        Lanjutkan Belajar
+      </ThemedText>
+    </Pressable>
   );
 }
 
@@ -245,6 +247,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     gap: 12,
+  },
+  skillCardPressed: {
+    opacity: 0.8,
   },
   skillCardRow: {
     flexDirection: "row",

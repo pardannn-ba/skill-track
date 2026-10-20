@@ -65,7 +65,7 @@ export default function ExploreScreen() {
     (skill: Skill) => {
       router.push({
         pathname: "/learning-path",
-        params: { skillId: skill.id },
+        params: { skillId: skill.id, from: "explore" },
       });
     },
     [router],
