@@ -5,10 +5,14 @@ import {
   ChevronRight,
   CircleUser,
   Home,
+  Lock,
+  LogOut,
+  Mail,
   Search,
   Settings,
   SquareCheckBig,
   Star,
+  User,
   X,
   type LucideIcon,
 } from "lucide-react-native";
@@ -17,6 +21,8 @@ type IconProps = {
   size?: number;
   color?: string;
 };
+
+export type { IconProps };
 
 /**
  * Ikon yang dipakai di aplikasi Skill-Track.
@@ -68,6 +74,26 @@ export const StarIcon = ({ size = 24, color }: IconProps) => (
 /** Ikon tutup (X) untuk modal pengaturan profil. */
 export const CloseIcon = ({ size = 24, color }: IconProps) => (
   <X size={size} color={color} />
+);
+
+/** Ikon surat untuk input Email/Username pada halaman auth. */
+export const MailIcon = ({ size = 24, color }: IconProps) => (
+  <Mail size={size} color={color} />
+);
+
+/** Ikon gembok untuk input Password pada halaman auth. */
+export const LockIcon = ({ size = 24, color }: IconProps) => (
+  <Lock size={size} color={color} />
+);
+
+/** Ikon pengguna untuk input Nama Lengkap pada halaman register. */
+export const UserIcon = ({ size = 24, color }: IconProps) => (
+  <User size={size} color={color} />
+);
+
+/** Ikon keluar (logout) di halaman Profil. */
+export const LogOutIcon = ({ size = 24, color }: IconProps) => (
+  <LogOut size={size} color={color} />
 );
 
 export type { LucideIcon };

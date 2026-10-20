@@ -40,6 +40,18 @@ export const colors = {
   star: "#FACC15",
   /** Warna buku ikon statistik "Materi Selesai" di Profil */
   statBook: "#3568FF",
+  /** Background halaman autentikasi (splash/login/register) — navy gelap. */
+  authBackground: "#03112B",
+  /** Panel bawah login/register — navy sedikit lebih terang. */
+  authPanel: "#061D36",
+  /** Background input autentikasi. */
+  authInput: "#08182E",
+  /** Border input autentikasi — biru keabu-abuan. */
+  authInputBorder: "#2E4C6E",
+  /** Tombol utama autentikasi — biru cerah. */
+  authButton: "#2176F5",
+  /** Teks kesalahan pada halaman autentikasi. */
+  authError: "#F87171",
 } as const;
 
 /**

@@ -25,9 +25,11 @@ import {
 import {
   BookCheckIcon,
   CloseIcon,
+  LogOutIcon,
   SettingsIcon,
   StarIcon,
 } from "@/components/icons";
+import { logout } from "@/data/auth";
 import ProgressBar from "@/components/progress-bar";
 import SubjectIcon from "@/components/subject-icon";
 import ThemedText from "@/components/themed-text";
@@ -222,6 +224,14 @@ export default function Profil() {
     });
   };
 
+  /** Akhiri sesi login → guard di _layout mengalihkan ke halaman Login. */
+  const handleLogout = async () => {
+    await logout();
+    // Tidak perlu navigasi manual: saat sesi berubah, guard Stack.Protected
+    // otomatis membuang riwayat halaman utama dan mengalihkan ke Login,
+    // sehingga tombol kembali tidak bisa melewati halaman login.
+  };
+
   const displayName = username ?? defaultUsername;
 
   return (
@@ -345,6 +355,19 @@ export default function Profil() {
             ))
           )}
         </View>
+
+        {/* Logout — kembali ke halaman Login */}
+        <Pressable
+          onPress={() => {
+            void handleLogout();
+          }}
+          style={({ pressed }) => [styles.logoutButton, pressed && styles.logoutButtonPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Keluar dari akun"
+        >
+          <LogOutIcon size={18} color={colors.authError} />
+          <ThemedText style={styles.logoutText}>Keluar</ThemedText>
+        </Pressable>
       </ScrollView>
 
       {/* Modal pengaturan profil sederhana: ubah nama */}
@@ -582,5 +605,26 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: "600",
     color: colors.text,
+  },
+  logoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.authInputBorder,
+    backgroundColor: colors.card,
+    marginTop: 4,
+  },
+  logoutButtonPressed: {
+    opacity: 0.8,
+  },
+  logoutText: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "600",
+    color: colors.authError,
   },
 });
