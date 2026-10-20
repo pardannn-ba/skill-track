@@ -1,8 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import {
+  Alert,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ArrowLeft, Check, ChevronRight, Lock } from "lucide-react-native";
+import {
+  ArrowLeft,
+  Check,
+  ChevronRight,
+  ChevronUp,
+  ExternalLink,
+  Lock,
+} from "lucide-react-native";
 import { colors, learningColors } from "@/constants/theme";
 import {
   getLearningPath,
@@ -24,6 +39,7 @@ import { recordActivity } from "@/data/profile";
 import ProgressBar from "@/components/progress-bar";
 import SubjectIcon from "@/components/subject-icon";
 import ThemedText from "@/components/themed-text";
+import EnglishMaterialDetail from "@/components/english-material-detail";
 
 /** Warna lingkaran/garis timeline berdasarkan status materi. */
 function statusColor(status: LearningMaterialStatus): string {
@@ -35,12 +51,23 @@ function statusColor(status: LearningMaterialStatus): string {
     : learningColors.lockedLine;
 }
 
+/** Font monospace untuk blok contoh kode (per platform). */
+const codeFontFamily = Platform.select({
+  ios: "Menlo",
+  default: "monospace",
+}) as string;
+
 /**
  * Halaman Learning Path (Detail Skill) — dibuka dari kartu skill di
- * Explore/Profil/Progress dengan param `skillId`. Skill belum dimulai:
- * seluruh materi terkunci dan tombol "Mulai Belajar" tersedia.
- * Progress dihitung dari jumlah materi selesai (0%, 20%, 40%, ... 100%)
- * dan disimpan di AsyncStorage supaya tidak kembali ke 0% saat app dibuka lagi.
+ * Explore/Profil/Progress dengan param `skillId`.
+ *
+ * Sesuai screenshot referensi: menekan kartu materi membuka detail
+ * INLINE di dalam kartu (penjelasan + contoh kode + link referensi +
+ * tombol Tandai Selesai). Hanya satu detail yang terbuka pada satu waktu;
+ * kecuali untuk skill English yang memakai detail bahasa khusus
+ * (EnglishMaterialDetail) sesuai jenis kontennya.
+ * menekan kartunya lagi menutup detail. Progress dihitung dari jumlah
+ * materi selesai (0%, 20%, 40%, ... 100%) dan disimpan di AsyncStorage.
  */
 export default function LearningPathScreen() {
   const router = useRouter();
@@ -61,6 +88,8 @@ export default function LearningPathScreen() {
   /** null = state belum dibaca dari penyimpanan. */
   const [completedIds, setCompletedIds] = useState<string[] | null>(null);
   const [started, setStarted] = useState<boolean | null>(null);
+  /** Id materi yang detailnya sedang terbuka (maks. satu). */
+  const [openId, setOpenId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
   useEffect(() => {
@@ -113,6 +142,7 @@ export default function LearningPathScreen() {
     }
   };
 
+  /** Tandai materi aktif selesai (tombol bawah) — tanpa duplikasi. */
   const handleComplete = async () => {
     if (!started || activeMaterial === null) {
       return;
@@ -121,9 +151,21 @@ export default function LearningPathScreen() {
     await recordActivity(activeMaterial.id);
   };
 
-  const openMaterial = useCallback(
+  /** Tandai materi yang detailnya terbuka sebagai selesai, lalu tutup detail. */
+  const handleCompleteOpen = async (material: LearningMaterial) => {
+    // Hanya materi aktif (pertama yang belum selesai) yang boleh ditandai;
+    // mencegah lompatan prasyarat dan progres ganda.
+    if (!activeMaterial || material.id !== activeMaterial.id) {
+      return;
+    }
+    await completeMaterial(material.id);
+    await recordActivity(material.id);
+    setOpenId(null);
+  };
+
+  /** Buka/tutup detail materi; materi terkunci menampilkan pesan yang jelas. */
+  const toggleMaterial = useCallback(
     (material: LearningMaterial, status: LearningMaterialStatus) => {
-      // Materi terkunci menampilkan pesan yang jelas (tidak dibuka).
       if (status === "locked") {
         const index = materials.findIndex((item) => item.id === material.id);
         const previous = index > 0 ? materials[index - 1] : null;
@@ -135,13 +177,26 @@ export default function LearningPathScreen() {
         );
         return;
       }
-      router.push({
-        pathname: "/material-detail",
-        params: { id: material.id },
-      });
+      setOpenId((prev) => (prev === material.id ? null : material.id));
     },
-    [materials, router],
+    [materials],
   );
+
+  /** Buka URL referensi di browser (W3Schools / British Council); gagal ditangani rapi. */
+  const openReference = useCallback(async (url: string) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        throw new Error("url not supported");
+      }
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert(
+        "Tautan gagal dibuka",
+        `Periksa koneksi internet atau buka URL secara manual:\n${url}`,
+      );
+    }
+  }, []);
 
   if (!path) {
     return (
@@ -215,80 +270,179 @@ export default function LearningPathScreen() {
               index < materials.length - 1
                 ? getMaterialStatus(materials, index + 1, completed)
                 : null;
+            const isOpen = openId === material.id && status !== "locked";
 
             return (
-              <Pressable
-                key={material.id}
-                onPress={() => openMaterial(material, status)}
-                style={({ pressed }) => [
-                  styles.row,
-                  status === "active" && styles.rowActive,
-                  pressed && status !== "locked" && styles.rowPressed,
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel={`Materi ${index + 1}: ${material.title}`}
-                accessibilityState={{ disabled: status === "locked" }}
-              >
-                {/* Garis timeline: bagian atas = warna status baris ini,
-                    bagian bawah = warna status baris berikutnya. */}
-                {index > 0 ? (
-                  <View
-                    style={[styles.lineTop, { backgroundColor: statusColor(status) }]}
-                  />
-                ) : null}
-                {nextStatus ? (
+              <View key={material.id} style={styles.materialWrap}>
+                {/* Baris header materi: nomor/centang, judul, deskripsi, panah/gembok */}
+                <Pressable
+                  onPress={() => toggleMaterial(material, status)}
+                  style={({ pressed }) => [
+                    styles.row,
+                    (status === "active" || isOpen) && styles.rowActive,
+                    pressed && status !== "locked" && styles.rowPressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Materi ${index + 1}: ${material.title}`}
+                  accessibilityState={{
+                    disabled: status === "locked",
+                    expanded: isOpen,
+                  }}
+                >
+                  {/* Garis timeline: bagian atas = warna status baris ini,
+                      bagian bawah = warna status baris berikutnya. */}
+                  {index > 0 ? (
+                    <View
+                      style={[styles.lineTop, { backgroundColor: statusColor(status) }]}
+                    />
+                  ) : null}
+                  {nextStatus ? (
+                    <View
+                      style={[
+                        styles.lineBottom,
+                        { backgroundColor: statusColor(nextStatus) },
+                      ]}
+                    />
+                  ) : null}
+
                   <View
                     style={[
-                      styles.lineBottom,
-                      { backgroundColor: statusColor(nextStatus) },
+                      styles.circle,
+                      status === "completed" && styles.circleCompleted,
+                      status === "active" && styles.circleActive,
+                      status === "locked" && styles.circleLocked,
                     ]}
-                  />
-                ) : null}
+                  >
+                    {status === "completed" ? (
+                      <Check
+                        size={18}
+                        color={learningColors.text}
+                        strokeWidth={3}
+                      />
+                    ) : (
+                      <ThemedText
+                        style={[
+                          styles.circleNumber,
+                          status === "locked" && styles.circleNumberLocked,
+                        ]}
+                      >
+                        {index + 1}
+                      </ThemedText>
+                    )}
+                  </View>
 
-                <View
-                  style={[
-                    styles.circle,
-                    status === "completed" && styles.circleCompleted,
-                    status === "active" && styles.circleActive,
-                    status === "locked" && styles.circleLocked,
-                  ]}
-                >
-                  {status === "completed" ? (
-                    <Check
-                      size={18}
-                      color={learningColors.text}
-                      strokeWidth={3}
+                  <View style={styles.rowInfo}>
+                    <ThemedText variant="cardTitle" style={styles.rowTitle}>
+                      {material.title}
+                    </ThemedText>
+                    <ThemedText
+                      variant="caption"
+                      color={learningColors.textSecondary}
+                    >
+                      {material.description}
+                    </ThemedText>
+                  </View>
+
+                  {status === "locked" ? (
+                    <Lock size={18} color={learningColors.lockedText} />
+                  ) : isOpen ? (
+                    <ChevronUp size={20} color={learningColors.textSecondary} />
+                  ) : (
+                    <ChevronRight size={20} color={learningColors.textSecondary} />
+                  )}
+                </Pressable>
+
+                {/* Detail materi terbuka: penjelasan + contoh kode + link + tombol.
+                    Untuk skill English, detail memakai komponen bahasa khusus. */}
+                {isOpen ? (
+                  path.skillId === "english" && material.english ? (
+                    <EnglishMaterialDetail
+                      material={material}
+                      isCompleted={status === "completed"}
+                      onComplete={() => {
+                        void handleCompleteOpen(material);
+                      }}
+                      onOpenReference={(url) => {
+                        void openReference(url);
+                      }}
                     />
                   ) : (
-                    <ThemedText
-                      style={[
-                        styles.circleNumber,
-                        status === "locked" && styles.circleNumberLocked,
-                      ]}
-                    >
-                      {index + 1}
+                  <View style={styles.detail}>
+                    <ThemedText variant="body" style={styles.detailText}>
+                      {material.explanation}
                     </ThemedText>
-                  )}
-                </View>
 
-                <View style={styles.rowInfo}>
-                  <ThemedText variant="cardTitle" style={styles.rowTitle}>
-                    {material.title}
-                  </ThemedText>
-                  <ThemedText
-                    variant="caption"
-                    color={learningColors.textSecondary}
-                  >
-                    {material.description}
-                  </ThemedText>
-                </View>
+                    {material.codeExample ? (
+                      <>
+                        <ThemedText
+                          variant="caption"
+                          color={learningColors.textSecondary}
+                          style={styles.codeLabel}
+                        >
+                          Contoh kode:
+                        </ThemedText>
+                        <View style={styles.codeBlock}>
+                          {material.codeExample.split("\n").map((line, lineIndex) => (
+                            <ThemedText key={lineIndex} style={styles.codeLine}>
+                              {line.length > 0 ? line : " "}
+                            </ThemedText>
+                          ))}
+                        </View>
+                      </>
+                    ) : null}
 
-                {status === "locked" ? (
-                  <Lock size={18} color={learningColors.lockedText} />
-                ) : (
-                  <ChevronRight size={20} color={learningColors.textSecondary} />
-                )}
-              </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        void openReference(material.referenceUrl);
+                      }}
+                      style={({ pressed }) => [
+                        styles.linkRow,
+                        pressed && styles.rowPressed,
+                      ]}
+                      accessibilityRole="link"
+                      accessibilityLabel="Pelajari lebih lanjut di W3Schools"
+                    >
+                      <ExternalLink size={16} color={learningColors.primary} />
+                      <ThemedText style={styles.linkText}>
+                        Pelajari lebih lanjut di W3Schools
+                      </ThemedText>
+                      <ChevronRight size={18} color={learningColors.textSecondary} />
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => {
+                        void handleCompleteOpen(material);
+                      }}
+                      disabled={status === "completed"}
+                      style={({ pressed }) => [
+                        styles.completeButton,
+                        status === "completed" && styles.completeButtonDone,
+                        pressed && status !== "completed" && styles.rowPressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        status === "completed"
+                          ? "Materi sudah selesai"
+                          : `Tandai ${material.title} selesai`
+                      }
+                    >
+                      {status === "completed" ? (
+                        <ThemedText style={styles.completeButtonText}>
+                          Materi Selesai
+                        </ThemedText>
+                      ) : (
+                        <View style={styles.doneRow}>
+                          <Check size={18} color={learningColors.text} strokeWidth={3} />
+                          <ThemedText style={styles.completeButtonText}>
+                            Tandai Selesai
+                          </ThemedText>
+                        </View>
+                      )}
+                    </Pressable>
+                  </View>
+                  )
+                ) : null}
+              </View>
             );
           })}
         </View>
@@ -307,7 +461,8 @@ export default function LearningPathScreen() {
           </View>
         ) : null}
 
-        {/* Tombol utama: Mulai Belajar (sebelum mulai) / Tandai Selesai */}
+        {/* Tombol bawah: Mulai Belajar (sebelum mulai) / Tandai Selesai
+            untuk materi aktif saat tidak ada detail terbuka */}
         {!isStarted ? (
           <Pressable
             onPress={() => {
@@ -316,8 +471,9 @@ export default function LearningPathScreen() {
             disabled={starting}
             style={({ pressed }) => [
               styles.completeButton,
+              styles.bottomButton,
               starting && styles.completeButtonDisabled,
-              pressed && styles.completeButtonPressed,
+              pressed && styles.rowPressed,
             ]}
             accessibilityRole="button"
             accessibilityLabel={`Mulai belajar ${skillName}`}
@@ -334,8 +490,9 @@ export default function LearningPathScreen() {
             disabled={activeMaterial === null}
             style={({ pressed }) => [
               styles.completeButton,
+              styles.bottomButton,
               activeMaterial === null && styles.completeButtonDisabled,
-              pressed && styles.completeButtonPressed,
+              pressed && styles.rowPressed,
             ]}
             accessibilityRole="button"
             accessibilityLabel="Tandai materi aktif selesai"
@@ -445,6 +602,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 8,
   },
+  materialWrap: {
+    position: "relative",
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -506,6 +666,46 @@ const styles = StyleSheet.create({
   rowTitle: {
     color: learningColors.text,
   },
+  detail: {
+    paddingHorizontal: ROW_PADDING_X,
+    paddingBottom: 14,
+    gap: 10,
+  },
+  detailText: {
+    color: learningColors.text,
+    lineHeight: 22,
+  },
+  codeLabel: {
+    marginTop: 2,
+  },
+  codeBlock: {
+    backgroundColor: "#08131F",
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 2,
+  },
+  codeLine: {
+    fontFamily: codeFontFamily,
+    fontSize: 12,
+    lineHeight: 18,
+    color: "#7BE3C8",
+  },
+  linkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 6,
+  },
+  linkText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: "600",
+    color: learningColors.primary,
+  },
   finishedBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -530,17 +730,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  bottomButton: {
+    marginTop: 22,
+  },
   completeButtonDisabled: {
     opacity: 0.45,
   },
-  completeButtonPressed: {
-    opacity: 0.85,
+  completeButtonDone: {
+    opacity: 0.55,
   },
   completeButtonText: {
     fontSize: 16,
     lineHeight: 22,
     fontWeight: "600",
     color: learningColors.text,
+  },
+  doneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   notFoundWrap: {
     flex: 1,
