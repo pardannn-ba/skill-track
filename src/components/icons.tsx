@@ -2,6 +2,7 @@ import {
   Bell,
   Book,
   ChartColumn,
+  ChevronLeft,
   ChevronRight,
   CircleUser,
   Home,
@@ -42,6 +43,11 @@ export const ChartIcon = ({ size = 24, color }: IconProps) => (
 
 export const ChevronRightIcon = ({ size = 24, color }: IconProps) => (
   <ChevronRight size={size} color={color} />
+);
+
+/** Ikon panah kiri untuk tombol kembali di halaman Pengaturan. */
+export const ChevronLeftIcon = ({ size = 24, color }: IconProps) => (
+  <ChevronLeft size={size} color={color} />
 );
 
 export const HomeIcon = ({ size = 24, color }: IconProps) => (

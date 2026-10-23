@@ -12,7 +12,10 @@ import {
 } from "@/components/icons";
 import { computeSummary, nextOpenMaterial, startedPaths, type ProgressState } from "@/data/progress-store";
 import { useProgressState } from "@/hooks/use-progress-state";
+import { useAuthState } from "@/hooks/use-auth-state";
+import { profileSubtitle } from "@/data/profile";
 import { computeProgress } from "@/data/learning-path";
+import ProfileHeader from "@/components/profile-header";
 
 const bottomEdges: Edge[] = ["left", "right", "bottom"];
 
@@ -24,6 +27,8 @@ const bottomEdges: Edge[] = ["left", "right", "bottom"];
 export default function Dashboard() {
   const router = useRouter();
   const progress: ProgressState | null = useProgressState();
+  // Profil diambil dari akun yang sedang login (bukan data demo hardcoded).
+  const { session } = useAuthState();
 
   const summary = computeSummary(progress ?? { started: [], completed: [] });
   const paths = progress ? startedPaths(progress) : [];
@@ -97,6 +102,17 @@ export default function Dashboard() {
         showsVerticalScrollIndicator={false}
       >
         <SafeAreaView edges={["top", "left", "right"]} style={styles.safeHeader}>
+          {/* Profil akun yang sedang login: inisial, nama, username/email */}
+          <ProfileHeader
+            fullName={session?.fullName ?? ""}
+            subtitle={profileSubtitle({
+              username: session?.username ?? "",
+              email: session?.email ?? "",
+            })}
+            onSettingsPress={() => router.push("/settings")}
+            style={styles.homeProfileHeader}
+          />
+
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerText}>
@@ -279,6 +295,10 @@ const styles = StyleSheet.create({
   },
   safeHeader: {
     backgroundColor: colors.background,
+  },
+  homeProfileHeader: {
+    paddingTop: 4,
+    paddingBottom: 6,
   },
   scrollContent: {
     paddingHorizontal: 20,

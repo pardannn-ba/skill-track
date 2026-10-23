@@ -56,6 +56,7 @@ export default function RootLayout() {
           <Stack.Screen name="activity-history" />
           <Stack.Screen name="material-detail" />
           <Stack.Screen name="skill-detail" />
+          <Stack.Screen name="settings" />
         </Stack.Protected>
         <Stack.Protected guard={session === null}>
           <Stack.Screen name="login" />

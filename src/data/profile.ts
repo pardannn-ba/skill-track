@@ -1,8 +1,12 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
-// Catatan penyimpanan: activity progress belajar kini SESI (memori),
-// sedangkan username tetap persisten via AsyncStorage karena bukan
-// bagian dari progress belajar.
+// Catatan penyimpanan:
+// - Data akun & profil (nama, username, email, password) → AsyncStorage
+//   per akun melalui src/data/auth.ts. Sumber tunggal profil adalah record
+//   akun yang sedang login — TIDAK ada nama default hardcoded untuk
+//   semua akun.
+// - Progress & aktivitas belajar → in-memory sesi (kembali ke awal saat
+//   reload) dan otomatis dibersihkan saat akun berganti supaya pengguna
+//   tidak melihat data milik pengguna lain.
+import { subscribeSession } from "@/data/auth";
 import {
   computeProgress,
   getLearningPath,
@@ -15,21 +19,9 @@ import {
 } from "@/data/progress-store";
 import { skillsData } from "@/data/skills";
 
-//
-// Kunci penyimpanan
-//
-
-/** Username yang diedit via halaman pengaturan. */
-export const usernameStorageKey = "@skill-track/profile/username";
-
-/** Username bawaan, dipakai untuk avatar, nama di header, dan default input. */
-export const defaultUsername = "Agus ariep yudhi Hidayat";
-
-/** Label role pengguna di bawah nama. */
-export const userRole = "Pelajar";
-
-/** Inisial yang ditampilkan pada avatar lingkaran. */
-export const avatarInitials = "AS";
+// Helper tampilan profil (inisial avatar & subtitle) hidup di modul
+// terpisah tanpa dependensi agar bisa diuji sendiri.
+export { initialsFromName, profileSubtitle } from "@/data/profile-display";
 
 /**
  * Riwayat aktivitas belajar: daftar timestamp dari setiap penyelesaian
@@ -37,6 +29,18 @@ export const avatarInitials = "AS";
  * hilang ketika aplikasi di-reload — konsisten dengan progress sesi.
  */
 let sessionActivity: { timestamp: number; materialId: string }[] = [];
+
+// Isolasi per akun: saat akun yang login berganti (login/logout), riwayat
+// aktivitas sesi dibuang agar pengguna baru tidak melihat aktivitas
+// pengguna sebelumnya.
+let activityOwner: string | null = null;
+subscribeSession((session) => {
+  const owner = session?.username ?? null;
+  if (owner !== activityOwner) {
+    activityOwner = owner;
+    sessionActivity = [];
+  }
+});
 
 //
 // Aktivitas belajar (sesi)
@@ -95,30 +99,6 @@ export function formatActivityDate(target: Date): string {
   const month = months[target.getMonth()];
   const year = target.getFullYear();
   return `${dayNames[target.getDay()]}, ${day} ${month} ${year}`;
-}
-
-//
-// Username
-//
-
-/** Baca username tersimpan; gagal/kosong = default. */
-export async function loadUsername(): Promise<string> {
-  try {
-    const stored = await AsyncStorage.getItem(usernameStorageKey);
-    const trimmed = stored?.trim();
-    return trimmed ? trimmed : defaultUsername;
-  } catch {
-    return defaultUsername;
-  }
-}
-
-/** Simpan username (trim); string kosong diabaikan. */
-export async function saveUsername(value: string): Promise<void> {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return;
-  }
-  await AsyncStorage.setItem(usernameStorageKey, trimmed);
 }
 
 //

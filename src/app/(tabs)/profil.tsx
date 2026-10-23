@@ -1,32 +1,26 @@
 import { useCallback, useMemo, useState } from "react";
 import {
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import Svg, { Circle, type CircleProps } from "react-native-svg";
 import { colors } from "@/constants/theme";
+import ProfileHeader from "@/components/profile-header";
+import { useAuthState } from "@/hooks/use-auth-state";
 import {
-  avatarInitials,
   buildWeeklyActivity,
   computeProfileStats,
-  defaultUsername,
-  loadUsername,
+  profileSubtitle,
   readActivityTimestamps,
-  saveUsername,
-  userRole,
   type ProfileStats,
 } from "@/data/profile";
 import {
   BookCheckIcon,
-  CloseIcon,
   LogOutIcon,
-  SettingsIcon,
   StarIcon,
 } from "@/components/icons";
 import { logout } from "@/data/auth";
@@ -164,22 +158,20 @@ function SkillRow({
 
 export default function Profil() {
   const router = useRouter();
-  /** null = data profil/progress sesi belum dibaca. */
-  const [username, setUsername] = useState<string | null>(null);
+  // Profil (nama/username/email) datang dari sesi login — sumber tunggal
+  // di auth store — sehingga otomatis ikut berubah setelah Edit Profil/
+  // Ganti Password dan selalu milik akun yang sedang login.
+  const { session } = useAuthState();
+  /** null = data progress sesi belum dibaca. */
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [weekly, setWeekly] = useState<{ label: string; count: number }[]>([]);
-  const [settingsVisible, setSettingsVisible] = useState(false);
-  const [nameDraft, setNameDraft] = useState("");
 
   const refresh = useCallback(async () => {
-    // Data di-load sekuensial dari store (username persisten;
-    // stats & aktivitas berasal dari sesi memori — cepat, lokal).
-    const [storedName, profileStats, activity] = await Promise.all([
-      loadUsername(),
+    // Stats & aktivitas berasal dari sesi memori — cepat, lokal.
+    const [profileStats, activity] = await Promise.all([
       computeProfileStats(),
       readActivityTimestamps(),
     ]);
-    setUsername(storedName);
     setStats(profileStats);
     setWeekly(buildWeeklyActivity(activity));
   }, []);
@@ -201,20 +193,6 @@ export default function Profil() {
   /** Jumlah skill yang benar-benar sudah dimulai (dari store tunggal). */
   const activeSkillCount = statsData.activeSkills;
 
-  const openSettings = () => {
-    setNameDraft(username ?? defaultUsername);
-    setSettingsVisible(true);
-  };
-
-  const handleSaveName = async () => {
-    // Kosong = tetap pakai nama sebelumnya.
-    if (nameDraft.trim().length > 0) {
-      await saveUsername(nameDraft);
-      setUsername(await loadUsername());
-    }
-    setSettingsVisible(false);
-  };
-
   const openSkill = (skillId: string) => {
     // Semua kartu skill di Profil membuka Learning Path skill-nya;
     // `from` dipakai Learning Path untuk kembali ke tab Profil.
@@ -232,8 +210,6 @@ export default function Profil() {
     // sehingga tombol kembali tidak bisa melewati halaman login.
   };
 
-  const displayName = username ?? defaultUsername;
-
   return (
     <SafeAreaView edges={bottomEdges} style={styles.safe}>
       <ScrollView
@@ -241,28 +217,16 @@ export default function Profil() {
         showsVerticalScrollIndicator={false}
       >
         <SafeAreaView edges={topEdges} style={styles.safeHeader}>
-          {/* Header profil */}
-          <View style={styles.header}>
-            <View style={styles.avatar}>
-              <ThemedText style={styles.avatarText}>{avatarInitials}</ThemedText>
-            </View>
-            <View style={styles.headerInfo}>
-              <ThemedText variant="cardTitle" numberOfLines={1}>
-                {displayName}
-              </ThemedText>
-              <ThemedText variant="caption" color="#7FA3D9">
-                {userRole}
-              </ThemedText>
-            </View>
-            <Pressable
-              hitSlop={10}
-              onPress={openSettings}
-              accessibilityLabel="Buka pengaturan profil"
-              accessibilityRole="button"
-            >
-              <SettingsIcon size={24} color={colors.textSecondary} />
-            </Pressable>
-          </View>
+          {/* Header profil — inisial, nama, dan username/email dari
+              akun yang sedang login; ikon roda gigi → halaman Pengaturan */}
+          <ProfileHeader
+            fullName={session?.fullName ?? ""}
+            subtitle={profileSubtitle({
+              username: session?.username ?? "",
+              email: session?.email ?? "",
+            })}
+            onSettingsPress={() => router.push("/settings")}
+          />
         </SafeAreaView>
 
         {/* Kartu Progress Keseluruhan */}
@@ -369,53 +333,6 @@ export default function Profil() {
           <ThemedText style={styles.logoutText}>Keluar</ThemedText>
         </Pressable>
       </ScrollView>
-
-      {/* Modal pengaturan profil sederhana: ubah nama */}
-      <Modal
-        visible={settingsVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSettingsVisible(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setSettingsVisible(false)}>
-          <Pressable style={styles.modalCard} onPress={() => undefined}>
-            <View style={styles.modalHeader}>
-              <ThemedText variant="cardTitle">Pengaturan</ThemedText>
-              <Pressable
-                hitSlop={8}
-                onPress={() => setSettingsVisible(false)}
-                accessibilityLabel="Tutup pengaturan"
-              >
-                <CloseIcon size={20} color={colors.textSecondary} />
-              </Pressable>
-            </View>
-            <View style={styles.fieldWrap}>
-              <ThemedText variant="caption">Nama pengguna</ThemedText>
-              <TextInput
-                value={nameDraft}
-                onChangeText={setNameDraft}
-                style={styles.input}
-                placeholderTextColor={colors.textSecondary}
-                placeholder="Masukkan nama kamu"
-                accessibilityLabel="Nama pengguna"
-              />
-            </View>
-            <Pressable
-              onPress={() => {
-                void handleSaveName();
-              }}
-              style={({ pressed }) => [
-                styles.saveButton,
-                pressed && styles.saveButtonPressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Simpan nama"
-            >
-              <ThemedText style={styles.saveButtonText}>Simpan</ThemedText>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -431,31 +348,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 24,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    paddingTop: 8,
-    paddingBottom: 18,
-  },
-  avatar: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    fontSize: 20,
-    lineHeight: 26,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  headerInfo: {
-    flex: 1,
-    gap: 2,
   },
   card: {
     backgroundColor: colors.card,
@@ -554,56 +446,6 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   skillPercent: {
-    color: colors.text,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(4, 12, 22, 0.7)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  modalCard: {
-    width: "100%",
-    backgroundColor: colors.card,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 18,
-    gap: 16,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  fieldWrap: {
-    gap: 8,
-  },
-  input: {
-    backgroundColor: colors.blueLayer,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: colors.text,
-    fontSize: 15,
-  },
-  saveButton: {
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  saveButtonPressed: {
-    opacity: 0.85,
-  },
-  saveButtonText: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: "600",
     color: colors.text,
   },
   logoutButton: {

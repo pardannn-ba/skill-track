@@ -1,23 +1,27 @@
 /**
- * AUTENTIKASI LOKAL SEMENTARA — khusus pengembangan / demo.
+ * AUTENTIKASI LOKAL — khusus pengembangan / demo.
  *
  * ⚠️ BATASAN YANG HARUS DIPAHAMI:
  * - Sistem ini TIDAK terhubung ke database/server mana pun. Akun disimpan
  *   di AsyncStorage perangkat ini saja.
- * - Password disimpan dalam bentuk teks biasa (plaintext). Hal ini hanya
- *   bisa diterima karena murni untuk pengembangan lokal. JANGAN gunakan
- *   pola ini untuk produksi.
- * - Saat backend autentikasi tersedia, ganti isi fungsi `login`,
- *   `register`, `loadSession`, dan `logout` dengan panggilan API —
- *   tipe dan nama ekspornya sengaja dibuat agar halaman Login/Register
- *   tidak perlu diubah.
+ * - Password TIDAK disimpan sebagai teks biasa. Password di-hash dengan
+ *   SHA-256 + salt acak per akun (expo-crypto) sebelum disimpan.
+ *   Keterbatasan: ini hashing, bukan KDF berat (bcrypt/scrypt/argon2) dan
+ *   storage tetap di AsyncStorage (bukan secure enclave) — cukup untuk
+ *   demo lokal, BUKAN untuk produksi. Saat backend autentikasi tersedia,
+ *   ganti isi fungsi `login`, `register`, `updateProfile`,
+ *   `changePassword`, `loadSession`, dan `logout` dengan panggilan API —
+ *   tipe dan nama ekspornya sengaja dibuat agar halaman UI tidak perlu
+ *   diubah total.
  *
- * Penyimpanan sengaja dipisah dari progress belajar (progress-store):
+ * Penyimpanan data akun:
  * - Akun & sesi login  → AsyncStorage (persisten, selamat dari reload).
+ *   Setiap akun punya record sendiri (id unik, nama, username, email,
+ *   salt, hash) sehingga profil Pengguna A dan Pengguna B terpisah.
  * - Progress belajar   → in-memory sesi (kembali ke awal saat reload).
- * - Username profil    → tetap di usernameStorageKey (data/profile.ts).
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Crypto from "expo-crypto";
 
 //
 // Kunci penyimpanan
@@ -38,15 +42,23 @@ export type AuthSession = {
   username: string;
   /** Nama lengkap pemilik akun. */
   fullName: string;
+  /** Email akun (opsional pada sesi lama; kosong jika tidak tersedia). */
+  email?: string;
   /** Waktu login (epoch ms). */
   loggedInAt: number;
 };
 
 export type AuthAccount = {
+  /** Id unik akun (dihasilkan saat akun dibuat). */
+  id: string;
   username: string;
   fullName: string;
   email: string;
-  password: string; // plaintext — HANYA untuk demo lokal, lihat catatan di atas.
+  /** Salt acak per akun (hex). */
+  passwordSalt: string;
+  /** SHA-256(salt:password) hex — bukan teks biasa. */
+  passwordHash: string;
+  /** Waktu pembuatan akun (epoch ms). */
   createdAt: number;
 };
 
@@ -56,13 +68,21 @@ export type AuthResult =
 
 export type RegisterResult = { ok: true } | { ok: false; error: string };
 
+/** Hasil operasi profil/password yang tidak butuh session baru. */
+export type ProfileResult = { ok: true } | { ok: false; error: string };
+
+/** Panjang minimum password (dipakai registrasi & ganti password). */
+export const MIN_PASSWORD_LENGTH = 8;
+
 //
-// Akun demo bawaan (belum terdaftar di storage — dicek langsung saat login)
+// Akun demo bawaan (dicek langsung saat login bila record-nya belum ada)
 //
 
 export const DEMO_USERNAME = "admin123";
 export const DEMO_PASSWORD = "admin123";
 export const DEMO_FULL_NAME = "Admin SkillTrack";
+/** Email akun demo (tidak ada email asli — dikosongkan). */
+export const DEMO_EMAIL = "";
 
 //
 // State sesi di memori — sumber tunggal selama aplikasi berjalan
@@ -89,28 +109,121 @@ function notify(): void {
 }
 
 //
-// Helper storage
+// Helper kriptografi & storage
 //
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function normalize(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+/** Id unik per akun (UUID dari expo-crypto; sync). */
+function createId(): string {
+  return Crypto.randomUUID();
+}
+
+/** Salt acak 16 byte (hex) per akun. */
+function createSalt(): string {
+  const bytes = Crypto.getRandomBytes(16);
+  let salt = "";
+  for (const byte of bytes) {
+    salt += byte.toString(16).padStart(2, "0");
+  }
+  return salt;
+}
+
+/** Hash password: SHA-256(salt:password) hex. */
+async function hashPassword(password: string, salt: string): Promise<string> {
+  return Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    `${salt}:${password}`,
+  );
+}
+
+/**
+ * Normalisasi satu entri storage → AuthAccount.
+ * Entri lama (password masih plaintext, tanpa id/salt/hash) dimigrasi ke
+ * bentuk hash supaya teks biasa tidak lagi tersimpan di perangkat.
+ */
+async function normalizeAccount(entry: unknown): Promise<AuthAccount | null> {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+  const raw = entry as Record<string, unknown>;
+  if (typeof raw.username !== "string" || !raw.username.trim()) {
+    return null;
+  }
+  const username = raw.username.trim();
+  const fullName =
+    typeof raw.fullName === "string" && raw.fullName.trim()
+      ? raw.fullName.trim()
+      : username;
+  const email = typeof raw.email === "string" ? raw.email.trim() : "";
+  const createdAt = typeof raw.createdAt === "number" ? raw.createdAt : Date.now();
+  const id = typeof raw.id === "string" && raw.id ? raw.id : createId();
+
+  if (typeof raw.passwordHash === "string" && typeof raw.passwordSalt === "string") {
+    return { id, username, fullName, email, passwordSalt: raw.passwordSalt, passwordHash: raw.passwordHash, createdAt };
+  }
+
+  // Legacy: password tersimpan plaintext → hash ulang dengan salt, lalu
+  // entri lama (dengan password teks biasa) ditimpa saat writeAccounts.
+  const legacyPassword = typeof raw.password === "string" ? raw.password : "";
+  const passwordSalt = createSalt();
+  const passwordHash = await hashPassword(legacyPassword, passwordSalt);
+  return { id, username, fullName, email, passwordSalt, passwordHash, createdAt };
+}
+
 async function readAccounts(): Promise<AuthAccount[]> {
+  let raw: string | null = null;
   try {
-    const raw = await AsyncStorage.getItem(accountsStorageKey);
-    if (!raw) {
-      return [];
-    }
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as AuthAccount[]) : [];
+    raw = await AsyncStorage.getItem(accountsStorageKey);
   } catch {
     return [];
   }
+  if (!raw) {
+    return [];
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
+  const accounts: AuthAccount[] = [];
+  let needsRewrite = false;
+  for (const entry of parsed) {
+    const account = await normalizeAccount(entry);
+    if (account) {
+      accounts.push(account);
+    }
+    // Entri legacy (plaintext) atau tidak valid → storage ditulis ulang
+    // agar jejak password teks biasa segera hilang.
+    if (
+      !entry ||
+      typeof entry !== "object" ||
+      typeof (entry as Record<string, unknown>).passwordHash !== "string"
+    ) {
+      needsRewrite = true;
+    }
+  }
+  if (needsRewrite) {
+    try {
+      await AsyncStorage.setItem(accountsStorageKey, JSON.stringify(accounts));
+    } catch {
+      // Gagal menulis ulang tidak menggagalkan operasi; coba lagi pada read berikutnya.
+    }
+  }
+  return accounts;
 }
 
 async function writeAccounts(accounts: AuthAccount[]): Promise<void> {
   await AsyncStorage.setItem(accountsStorageKey, JSON.stringify(accounts));
-}
-
-function normalize(value: string): string {
-  return value.trim().toLowerCase();
 }
 
 //
@@ -172,7 +285,8 @@ export async function logout(): Promise<void> {
 
 /**
  * Login lokal dengan username/email + password.
- * Mendukung akun demo `admin123` dan akun hasil register.
+ * Mendukung akun demo `admin123` (bila record-nya belum dibuat) dan
+ * akun hasil register.
  */
 export async function login(identifier: string, password: string): Promise<AuthResult> {
   const id = normalize(identifier);
@@ -180,25 +294,52 @@ export async function login(identifier: string, password: string): Promise<AuthR
     return { ok: false, error: "Email/username dan password wajib diisi." };
   }
 
-  // Akun demo bawaan.
-  if (id === DEMO_USERNAME && password === DEMO_PASSWORD) {
+  const accounts = await readAccounts();
+  const account = accounts.find(
+    (acc) => normalize(acc.username) === id || normalize(acc.email) === id,
+  );
+
+  if (account) {
+    const passwordHash = await hashPassword(password, account.passwordSalt);
+    if (passwordHash !== account.passwordHash) {
+      return {
+        ok: false,
+        error: "Email/username atau password salah. Periksa lalu coba lagi.",
+      };
+    }
     const session: AuthSession = {
-      username: DEMO_USERNAME,
-      fullName: DEMO_FULL_NAME,
+      username: account.username,
+      fullName: account.fullName,
+      email: account.email,
       loggedInAt: Date.now(),
     };
     await persistSession(session);
     return { ok: true, session };
   }
 
-  const accounts = await readAccounts();
-  const account = accounts.find(
-    (acc) => normalize(acc.username) === id || normalize(acc.email) === id,
-  );
-  if (account && account.password === password) {
+  // Akun demo bawaan — hanya bila BELUM ada record akunnya, supaya setelah
+  // profil/password demo diubah, aturan login normal (hash) yang berlaku.
+  if (id === DEMO_USERNAME && password === DEMO_PASSWORD) {
+    const passwordSalt = createSalt();
+    const demoAccount: AuthAccount = {
+      id: createId(),
+      username: DEMO_USERNAME,
+      fullName: DEMO_FULL_NAME,
+      email: DEMO_EMAIL,
+      passwordSalt,
+      passwordHash: await hashPassword(DEMO_PASSWORD, passwordSalt),
+      createdAt: Date.now(),
+    };
+    accounts.push(demoAccount);
+    try {
+      await writeAccounts(accounts);
+    } catch {
+      // Tetap lanjut login; record akan dibuat ulang pada read berikutnya.
+    }
     const session: AuthSession = {
-      username: account.username,
-      fullName: account.fullName,
+      username: demoAccount.username,
+      fullName: demoAccount.fullName,
+      email: demoAccount.email,
       loggedInAt: Date.now(),
     };
     await persistSession(session);
@@ -215,8 +356,6 @@ export async function login(identifier: string, password: string): Promise<AuthR
 // Register
 //
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 export type RegisterInput = {
   fullName: string;
   identifier: string; // username ATAU email
@@ -227,6 +366,7 @@ export type RegisterInput = {
 /**
  * Validasi + simpan akun baru ke AsyncStorage lokal.
  * Tidak ada server yang dihubungi — murni penyimpanan perangkat.
+ * Password disimpan sebagai hash (salt + SHA-256), bukan teks biasa.
  * Tidak otomatis login — pengguna diarahkan ke halaman Login.
  */
 export async function register(input: RegisterInput): Promise<RegisterResult> {
@@ -258,13 +398,14 @@ export async function register(input: RegisterInput): Promise<RegisterResult> {
 
   const isEmail = identifier.includes("@");
   const email = isEmail ? identifier : "";
-  // Untuk identifier non-email, kolom email diisi placeholder agar unique check
-  // email tetap sederhana; login menerima username ATAU email.
+  const passwordSalt = createSalt();
   const account: AuthAccount = {
+    id: createId(),
     username,
     fullName,
     email,
-    password: input.password, // plaintext — hanya untuk demo lokal
+    passwordSalt,
+    passwordHash: await hashPassword(input.password, passwordSalt),
     createdAt: Date.now(),
   };
   accounts.push(account);
@@ -278,5 +419,110 @@ export async function register(input: RegisterInput): Promise<RegisterResult> {
   }
 
   // Berhasil — tidak membuat sesi; pengguna harus login manual.
+  return { ok: true };
+}
+
+//
+// Profil akun aktif
+//
+
+/**
+ * Perbarui nama lengkap dan/atau username AKUN YANG SEDANG LOGIN saja.
+ * Username dipakai sebagai identitas login, jadi wajib unik. Jika username
+ * berubah, sesi login ikut diperbarui sehingga semua halaman (Dashboard,
+ * Profil, Pengaturan) langsung menampilkan data terbaru.
+ */
+export async function updateProfile(input: {
+  fullName: string;
+  username: string;
+}): Promise<ProfileResult> {
+  const session = cache;
+  if (!session) {
+    return { ok: false, error: "Tidak ada sesi login. Silakan login kembali." };
+  }
+
+  const fullName = input.fullName.trim();
+  const username = input.username.trim();
+
+  if (!fullName) {
+    return { ok: false, error: "Nama lengkap wajib diisi." };
+  }
+  if (!username) {
+    return { ok: false, error: "Username wajib diisi." };
+  }
+  if (username.includes("@") && !EMAIL_REGEX.test(username)) {
+    return { ok: false, error: "Format email tidak valid." };
+  }
+
+  const accounts = await readAccounts();
+  const currentId = normalize(session.username);
+  const index = accounts.findIndex((acc) => normalize(acc.username) === currentId);
+  if (index < 0) {
+    return { ok: false, error: "Akun tidak ditemukan. Silakan login kembali." };
+  }
+
+  const usernameTaken = accounts.some(
+    (acc, i) => i !== index && normalize(acc.username) === normalize(username),
+  );
+  // Jangan biarkan akun lain mengambil username akun demo bawaan.
+  const claimsDemoName =
+    normalize(username) === DEMO_USERNAME && currentId !== DEMO_USERNAME;
+  if (usernameTaken || claimsDemoName) {
+    return { ok: false, error: "Username sudah digunakan. Pilih username lain." };
+  }
+
+  const updated: AuthAccount = { ...accounts[index], fullName, username };
+  const nextAccounts = [...accounts];
+  nextAccounts[index] = updated;
+  try {
+    await writeAccounts(nextAccounts);
+  } catch {
+    return { ok: false, error: "Gagal menyimpan perubahan. Coba lagi." };
+  }
+
+  // Sinkronkan sesi aktif agar UI langsung menampilkan data baru.
+  await persistSession({
+    ...session,
+    username: updated.username,
+    fullName: updated.fullName,
+    email: updated.email,
+  });
+  return { ok: true };
+}
+
+/**
+ * Ganti password AKUN YANG SEDANG LOGIN saja (tanpa password lama —
+ * alur sederhana untuk autentikasi lokal). Password baru diverifikasi
+ * panjang minimum lalu disimpan sebagai hash salt+SHA-256; password lama
+ * otomatis tidak berfungsi untuk login berikutnya.
+ */
+export async function changePassword(newPassword: string): Promise<ProfileResult> {
+  const session = cache;
+  if (!session) {
+    return { ok: false, error: "Tidak ada sesi login. Silakan login kembali." };
+  }
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    return {
+      ok: false,
+      error: `Password minimal ${MIN_PASSWORD_LENGTH} karakter.`,
+    };
+  }
+
+  const accounts = await readAccounts();
+  const currentId = normalize(session.username);
+  const index = accounts.findIndex((acc) => normalize(acc.username) === currentId);
+  if (index < 0) {
+    return { ok: false, error: "Akun tidak ditemukan. Silakan login kembali." };
+  }
+
+  const passwordSalt = createSalt();
+  const passwordHash = await hashPassword(newPassword, passwordSalt);
+  const nextAccounts = [...accounts];
+  nextAccounts[index] = { ...accounts[index], passwordSalt, passwordHash };
+  try {
+    await writeAccounts(nextAccounts);
+  } catch {
+    return { ok: false, error: "Gagal menyimpan password baru. Coba lagi." };
+  }
   return { ok: true };
 }

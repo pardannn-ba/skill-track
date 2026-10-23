@@ -17,6 +17,7 @@ import {
   countCompleted,
 } from "@/data/learning-path";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { subscribeSession } from "@/data/auth";
 
 //
 // Sumber data utama: skill yang sudah dimulai + status materi tiap skill.
@@ -71,6 +72,20 @@ function notify(state: ProgressState) {
     listener(state);
   }
 }
+
+// Isolasi per akun: saat akun yang login berganti (login/logout), seluruh
+// progress in-memory dibuang agar pengguna baru tidak melihat progress
+// milik pengguna sebelumnya.
+let progressOwner: string | null = null;
+subscribeSession((session) => {
+  const owner = session?.username ?? null;
+  if (owner !== progressOwner) {
+    progressOwner = owner;
+    if (cache.started.length > 0 || cache.completed.length > 0) {
+      applyState(initialState);
+    }
+  }
+});
 
 // Bersihkan sisa key permanen dari build lama (sekali per sesi) supaya
 // progress lama tidak pernah muncul kembali dari storage.
