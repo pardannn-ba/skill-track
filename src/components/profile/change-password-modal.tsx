@@ -10,8 +10,8 @@ import {
   View,
 } from "react-native";
 import { colors } from "@/constants/theme";
-import ThemedText from "@/components/themed-text";
-import { CloseIcon } from "@/components/icons";
+import ThemedText from "@/components/ui/themed-text";
+import { CloseIcon } from "@/components/ui/icons";
 import { changePassword, MIN_PASSWORD_LENGTH } from "@/data/auth";
 
 type ChangePasswordModalProps = {

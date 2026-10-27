@@ -9,7 +9,7 @@ import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import Svg, { Circle, type CircleProps } from "react-native-svg";
 import { colors } from "@/constants/theme";
-import ProfileHeader from "@/components/profile-header";
+import ProfileHeader from "@/components/profile/profile-header";
 import { useAuthState } from "@/hooks/use-auth-state";
 import {
   buildWeeklyActivity,
@@ -22,11 +22,11 @@ import {
   BookCheckIcon,
   LogOutIcon,
   StarIcon,
-} from "@/components/icons";
+} from "@/components/ui/icons";
 import { logout } from "@/data/auth";
-import ProgressBar from "@/components/progress-bar";
-import SubjectIcon from "@/components/subject-icon";
-import ThemedText from "@/components/themed-text";
+import ProgressBar from "@/components/ui/progress-bar";
+import SubjectIcon from "@/components/ui/subject-icon";
+import ThemedText from "@/components/ui/themed-text";
 
 const bottomEdges: Edge[] = ["left", "right", "bottom"];
 const topEdges: Edge[] = ["top", "left", "right"];
@@ -51,6 +51,9 @@ const statIconBox = {
   height: 40,
   borderRadius: 20,
   backgroundColor: "#203A5A",
+  // Ikon dipusatkan di dalam lingkaran agar checklist & bintang rapi
+  alignItems: "center" as const,
+  justifyContent: "center" as const,
 };
 
 /**
@@ -386,15 +389,16 @@ const styles = StyleSheet.create({
   },
   statList: {
     flex: 1,
-    gap: 14,
+    gap: 16,
   },
   statRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 14,
   },
   statInfo: {
-    gap: 1,
+    flexShrink: 1,
+    gap: 4,
   },
   statValue: {
     fontSize: 18,

@@ -6,7 +6,7 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import SkillTrackLogo from "@/components/skilltrack-logo";
+import SkillTrackLogo from "@/components/auth/skilltrack-logo";
 import { colors } from "@/constants/theme";
 
 /** Durasi total splash (dalam batas 1,5–2,5 detik). */

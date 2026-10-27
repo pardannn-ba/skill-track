@@ -4,9 +4,9 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { colors } from "@/constants/theme";
 import { skillsData } from "@/data/skills";
-import SubjectIcon from "@/components/subject-icon";
-import ProgressBar from "@/components/progress-bar";
-import ThemedText from "@/components/themed-text";
+import SubjectIcon from "@/components/ui/subject-icon";
+import ProgressBar from "@/components/ui/progress-bar";
+import ThemedText from "@/components/ui/themed-text";
 
 /**
  * Halaman detail skill, dibuka saat kartu di halaman Explore ditekan.

@@ -4,7 +4,7 @@ import * as SplashScreen from "expo-splash-screen";
 import * as SystemUI from "expo-system-ui";
 import { useCallback, useEffect, useState } from "react";
 import { colors } from "@/constants/theme";
-import AuthSplash from "@/components/auth-splash";
+import AuthSplash from "@/components/auth/auth-splash";
 import { useAuthState } from "@/hooks/use-auth-state";
 
 // Tahan splash native (app.json) sampai splash animasi JS siap tampil,

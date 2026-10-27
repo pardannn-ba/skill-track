@@ -12,9 +12,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, useRouter } from "expo-router";
 import { colors } from "@/constants/theme";
-import ThemedText from "@/components/themed-text";
-import ChangePasswordModal from "@/components/change-password-modal";
-import { ChevronLeftIcon, LogOutIcon } from "@/components/icons";
+import ThemedText from "@/components/ui/themed-text";
+import ChangePasswordModal from "@/components/profile/change-password-modal";
+import { ChevronLeftIcon, LogOutIcon } from "@/components/ui/icons";
 import { logout, updateProfile } from "@/data/auth";
 import { useAuthState } from "@/hooks/use-auth-state";
 

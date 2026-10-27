@@ -5,8 +5,8 @@ import {
   HomeIcon,
   ProfileIcon,
   SearchIcon,
-} from "@/components/icons";
-import ThemedText from "@/components/themed-text";
+} from "@/components/ui/icons";
+import ThemedText from "@/components/ui/themed-text";
 import type { ReactNode } from "react";
 import type { ColorValue } from "react-native";
 

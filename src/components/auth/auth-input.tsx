@@ -1,7 +1,7 @@
 import { forwardRef, useState, type ReactNode } from "react";
 import { StyleSheet, TextInput, View, type TextInputProps } from "react-native";
 import { colors } from "@/constants/theme";
-import type { IconProps } from "@/components/icons";
+import type { IconProps } from "@/components/ui/icons";
 
 type AuthInputProps = TextInputProps & {
   /** Ikon kiri (Mail/Lock/User dari components/icons). */

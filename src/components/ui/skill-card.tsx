@@ -2,8 +2,8 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 import { colors } from "@/constants/theme";
 import type { Skill } from "@/data/skills";
-import SubjectIcon from "@/components/subject-icon";
-import ThemedText from "@/components/themed-text";
+import SubjectIcon from "@/components/ui/subject-icon";
+import ThemedText from "@/components/ui/themed-text";
 
 /** Status belajar skill untuk kartu di Explore. */
 export type SkillCardStatus = "not-started" | "in-progress" | "completed";

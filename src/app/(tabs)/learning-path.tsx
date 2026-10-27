@@ -36,10 +36,10 @@ import {
   subscribeProgress,
 } from "@/data/progress-store";
 import { recordActivity } from "@/data/profile";
-import ProgressBar from "@/components/progress-bar";
-import SubjectIcon from "@/components/subject-icon";
-import ThemedText from "@/components/themed-text";
-import EnglishMaterialDetail from "@/components/english-material-detail";
+import ProgressBar from "@/components/ui/progress-bar";
+import SubjectIcon from "@/components/ui/subject-icon";
+import ThemedText from "@/components/ui/themed-text";
+import EnglishMaterialDetail from "@/components/learning-path/english-material-detail";
 
 /** Warna lingkaran/garis timeline berdasarkan status materi. */
 function statusColor(status: LearningMaterialStatus): string {

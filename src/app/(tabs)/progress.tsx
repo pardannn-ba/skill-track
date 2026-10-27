@@ -9,10 +9,10 @@ import {
   type ProgressState,
 } from "@/data/progress-store";
 import { useProgressState } from "@/hooks/use-progress-state";
-import ProgressBar from "@/components/progress-bar";
-import SubjectIcon from "@/components/subject-icon";
-import ThemedText from "@/components/themed-text";
-import { ChevronRightIcon } from "@/components/icons";
+import ProgressBar from "@/components/ui/progress-bar";
+import SubjectIcon from "@/components/ui/subject-icon";
+import ThemedText from "@/components/ui/themed-text";
+import { ChevronRightIcon } from "@/components/ui/icons";
 
 const bottomEdges: Edge[] = ["left", "right", "bottom"];
 

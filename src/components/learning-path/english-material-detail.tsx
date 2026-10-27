@@ -23,7 +23,7 @@ import {
   type EnglishFillExercise,
   type LearningMaterial,
 } from "@/data/learning-path";
-import ThemedText from "@/components/themed-text";
+import ThemedText from "@/components/ui/themed-text";
 
 /** Warna feedback jawaban salah (merah lembut, konsisten dark navy). */
 const WRONG_COLOR = "#FF7A7A";

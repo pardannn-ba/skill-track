@@ -9,7 +9,7 @@ import {
   formatActivityDate,
   readActivityTimestamps,
 } from "@/data/profile";
-import ThemedText from "@/components/themed-text";
+import ThemedText from "@/components/ui/themed-text";
 
 /**
  * Riwayat aktivitas belajar — dibuka dari tombol "Lihat semua"

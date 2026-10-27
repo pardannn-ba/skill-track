@@ -15,10 +15,10 @@ import {
   type ProgressState,
 } from "@/data/progress-store";
 import { useProgressState } from "@/hooks/use-progress-state";
-import SearchBar from "@/components/search-bar";
-import CategoryFilter from "@/components/category-filter";
-import SkillCard, { type SkillCardStatus } from "@/components/skill-card";
-import ThemedText from "@/components/themed-text";
+import SearchBar from "@/components/ui/search-bar";
+import CategoryFilter from "@/components/ui/category-filter";
+import SkillCard, { type SkillCardStatus } from "@/components/ui/skill-card";
+import ThemedText from "@/components/ui/themed-text";
 
 /**
  * Halaman Explore Skills: katalog seluruh skill dengan pencarian nama

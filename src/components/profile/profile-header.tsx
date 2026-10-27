@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { colors } from "@/constants/theme";
-import ThemedText from "@/components/themed-text";
-import { SettingsIcon } from "@/components/icons";
+import ThemedText from "@/components/ui/themed-text";
+import { SettingsIcon } from "@/components/ui/icons";
 import { initialsFromName } from "@/data/profile";
 
 type ProfileHeaderProps = {

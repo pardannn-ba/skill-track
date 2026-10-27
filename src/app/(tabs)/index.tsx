@@ -2,20 +2,20 @@ import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { colors } from "@/constants/theme";
-import ProgressBar from "@/components/progress-bar";
-import SubjectIcon from "@/components/subject-icon";
-import ThemedText from "@/components/themed-text";
+import ProgressBar from "@/components/ui/progress-bar";
+import SubjectIcon from "@/components/ui/subject-icon";
+import ThemedText from "@/components/ui/themed-text";
 import {
   BellIcon,
   BookIcon,
   ChevronRightIcon,
-} from "@/components/icons";
+} from "@/components/ui/icons";
 import { computeSummary, nextOpenMaterial, startedPaths, type ProgressState } from "@/data/progress-store";
 import { useProgressState } from "@/hooks/use-progress-state";
 import { useAuthState } from "@/hooks/use-auth-state";
 import { profileSubtitle } from "@/data/profile";
 import { computeProgress } from "@/data/learning-path";
-import ProfileHeader from "@/components/profile-header";
+import ProfileHeader from "@/components/profile/profile-header";
 
 const bottomEdges: Edge[] = ["left", "right", "bottom"];
 

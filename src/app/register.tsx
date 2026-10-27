@@ -11,10 +11,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, useRouter } from "expo-router";
 import { colors } from "@/constants/theme";
-import SkillTrackLogo from "@/components/skilltrack-logo";
-import AuthInput from "@/components/auth-input";
-import ThemedText from "@/components/themed-text";
-import { LockIcon, MailIcon, UserIcon } from "@/components/icons";
+import SkillTrackLogo from "@/components/auth/skilltrack-logo";
+import AuthInput from "@/components/auth/auth-input";
+import ThemedText from "@/components/ui/themed-text";
+import { LockIcon, MailIcon, UserIcon } from "@/components/ui/icons";
 import { register } from "@/data/auth";
 import { useAuthState } from "@/hooks/use-auth-state";
 

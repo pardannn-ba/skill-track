@@ -11,7 +11,7 @@ import {
   subscribeProgress,
 } from "@/data/progress-store";
 import { recordActivity } from "@/data/profile";
-import ThemedText from "@/components/themed-text";
+import ThemedText from "@/components/ui/themed-text";
 
 /**
  * Halaman detail materi Learning Path.
