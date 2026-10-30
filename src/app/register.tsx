@@ -81,7 +81,7 @@ export default function RegisterScreen() {
         >
           {/* Header identik dengan halaman Login */}
           <View style={styles.header}>
-            <SkillTrackLogo size={80} />
+            <SkillTrackLogo size={190} />
             <ThemedText style={styles.title}>Selamat Datang</ThemedText>
             <ThemedText style={styles.subtitle}>
               Lacak progres, Capai skill impianmu
