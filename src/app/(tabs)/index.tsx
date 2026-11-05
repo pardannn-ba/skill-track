@@ -1,21 +1,24 @@
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { SafeAreaView, type Edge } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { colors } from "@/constants/theme";
-import ProgressBar from "@/components/ui/progress-bar";
-import SubjectIcon from "@/components/ui/subject-icon";
-import ThemedText from "@/components/ui/themed-text";
+import { testDatabase } from "@/lib/testDatabase";
+import { useEffect } from "react";
+
+import ProfileHeader from "@/components/profile/profile-header";
 import {
   BellIcon,
   BookIcon,
   ChevronRightIcon,
 } from "@/components/ui/icons";
-import { computeSummary, nextOpenMaterial, startedPaths, type ProgressState } from "@/data/progress-store";
-import { useProgressState } from "@/hooks/use-progress-state";
-import { useAuthState } from "@/hooks/use-auth-state";
-import { profileSubtitle } from "@/data/profile";
+import ProgressBar from "@/components/ui/progress-bar";
+import SubjectIcon from "@/components/ui/subject-icon";
+import ThemedText from "@/components/ui/themed-text";
+import { colors } from "@/constants/theme";
 import { computeProgress } from "@/data/learning-path";
-import ProfileHeader from "@/components/profile/profile-header";
+import { profileSubtitle } from "@/data/profile";
+import { computeSummary, nextOpenMaterial, startedPaths, type ProgressState } from "@/data/progress-store";
+import { useAuthState } from "@/hooks/use-auth-state";
+import { useProgressState } from "@/hooks/use-progress-state";
+import { useRouter } from "expo-router";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 
 const bottomEdges: Edge[] = ["left", "right", "bottom"];
 
@@ -26,6 +29,10 @@ const bottomEdges: Edge[] = ["left", "right", "bottom"];
  */
 export default function Dashboard() {
   const router = useRouter();
+   // TEST KONEKSI DATABASE SUPABASE
+ useEffect(() => {
+  testDatabase();
+}, []);
   const progress: ProgressState | null = useProgressState();
   // Profil diambil dari akun yang sedang login (bukan data demo hardcoded).
   const { session } = useAuthState();

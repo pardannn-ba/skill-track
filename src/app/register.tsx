@@ -18,17 +18,20 @@ import { LockIcon, MailIcon, UserIcon } from "@/components/ui/icons";
 import { register } from "@/data/auth";
 import { useAuthState } from "@/hooks/use-auth-state";
 
+
 /**
- * Halaman Register (sesuai screenshot referensi kedua).
- * Akun disimpan LOKAL di AsyncStorage perangkat — bukan di server.
- * Setelah berhasil, pengguna diarahkan ke halaman Login.
+ * Halaman Register SkillTrack.
+ * Akun disimpan menggunakan Supabase Auth.
+ * Setelah mendaftar, pengguna diarahkan ke halaman Login.
  */
+
 export default function RegisterScreen() {
   const router = useRouter();
   const { session, ready } = useAuthState();
 
   const [fullName, setFullName] = useState("");
-  const [identifier, setIdentifier] = useState(""); // username ATAU email
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -39,30 +42,33 @@ export default function RegisterScreen() {
     return <Redirect href="/(tabs)" />;
   }
 
+
   const handleRegister = async () => {
-    if (submitting) {
-      return;
-    }
+    if (submitting) return;
+
     setError(null);
     setSubmitting(true);
+
     try {
       const result = await register({
         fullName,
-        identifier,
+        username,
+        email,
         password,
         confirmPassword,
       });
+
       if (!result.ok) {
         setError(result.error);
         return;
       }
-      // Konfirmasi sukses ditampilkan sebagai banner di halaman Login
-      // (lintas platform — Alert.alert tidak berfungsi di web).
-      // `replace` agar riwayat tidak menumpuk: register keluar dari stack.
+
       router.replace({
         pathname: "/login",
-        params: { registered: identifier.trim() },
+        params: { registered: email.trim() },
       });
+    } catch {
+      setError("Terjadi kesalahan. Silakan coba lagi.");
     } finally {
       setSubmitting(false);
     }
@@ -108,20 +114,36 @@ export default function RegisterScreen() {
                 accessibilityLabel="Nama lengkap"
               />
               <AuthInput
-                icon={MailIcon}
-                placeholder="Email atau Username"
-                value={identifier}
+                icon={UserIcon}
+                placeholder="Username"
+                value={username}
                 onChangeText={(text) => {
-                  setIdentifier(text);
+                  setUsername(text);
+                  if (error) setError(null);
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="username"
+                returnKeyType="next"
+                editable={!submitting}
+                accessibilityLabel="Username"
+              />
+
+              <AuthInput
+                icon={MailIcon}
+                placeholder="Email"
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
                   if (error) setError(null);
                 }}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
-                textContentType="username"
+                textContentType="emailAddress"
                 returnKeyType="next"
                 editable={!submitting}
-                accessibilityLabel="Email atau Username"
+                accessibilityLabel="Email"
               />
               <AuthInput
                 icon={LockIcon}
@@ -133,15 +155,14 @@ export default function RegisterScreen() {
                 }}
                 secureTextEntry
                 autoCapitalize="none"
-                autoCorrect={false}
-                textContentType="newPassword"
                 returnKeyType="next"
                 editable={!submitting}
                 accessibilityLabel="Password"
               />
+
               <AuthInput
                 icon={LockIcon}
-                placeholder="Konfirmasi Password"
+                placeholder="Konfirmasi password"
                 value={confirmPassword}
                 onChangeText={(text) => {
                   setConfirmPassword(text);
@@ -149,15 +170,11 @@ export default function RegisterScreen() {
                 }}
                 secureTextEntry
                 autoCapitalize="none"
-                autoCorrect={false}
-                textContentType="newPassword"
                 returnKeyType="done"
-                onSubmitEditing={() => {
-                  void handleRegister();
-                }}
                 editable={!submitting}
-                accessibilityLabel="Konfirmasi Password"
+                accessibilityLabel="Konfirmasi password"
               />
+
 
               {error ? (
                 <ThemedText style={styles.errorText} accessibilityRole="alert">
