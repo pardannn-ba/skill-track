@@ -1,16 +1,36 @@
+<<<<<<< HEAD
 import { testDatabase } from "@/lib/testDatabase";
 import { useEffect } from "react";
 
 import ProfileHeader from "@/components/profile/profile-header";
+=======
+import { useState } from "react";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { SafeAreaView, type Edge } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { colors } from "@/constants/theme";
+import ProgressBar from "@/components/ui/progress-bar";
+import SubjectIcon from "@/components/ui/subject-icon";
+import ThemedText from "@/components/ui/themed-text";
+>>>>>>> c403dda3b27caedda0bb1f81de090f736bb73cb4
 import {
   BellIcon,
   BookIcon,
   ChevronRightIcon,
 } from "@/components/ui/icons";
+<<<<<<< HEAD
 import ProgressBar from "@/components/ui/progress-bar";
 import SubjectIcon from "@/components/ui/subject-icon";
 import ThemedText from "@/components/ui/themed-text";
 import { colors } from "@/constants/theme";
+=======
+import NotificationPopup from "@/components/notifications/notification-popup";
+import { useNotificationsState } from "@/hooks/use-notifications-state";
+import { computeSummary, nextOpenMaterial, startedPaths, type ProgressState } from "@/data/progress-store";
+import { useProgressState } from "@/hooks/use-progress-state";
+import { useAuthState } from "@/hooks/use-auth-state";
+import { profileSubtitle } from "@/data/profile";
+>>>>>>> c403dda3b27caedda0bb1f81de090f736bb73cb4
 import { computeProgress } from "@/data/learning-path";
 import { profileSubtitle } from "@/data/profile";
 import { computeSummary, nextOpenMaterial, startedPaths, type ProgressState } from "@/data/progress-store";
@@ -36,6 +56,15 @@ export default function Dashboard() {
   const progress: ProgressState | null = useProgressState();
   // Profil diambil dari akun yang sedang login (bukan data demo hardcoded).
   const { session } = useAuthState();
+  // Notifikasi lokal (data simulasi) — popup tanpa berpindah halaman.
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    removeAll,
+  } = useNotificationsState();
+  const [notificationOpen, setNotificationOpen] = useState(false);
 
   const summary = computeSummary(progress ?? { started: [], completed: [] });
   const paths = progress ? startedPaths(progress) : [];
@@ -126,7 +155,30 @@ export default function Dashboard() {
               <ThemedText variant="title">Selamat pagi! ☀️</ThemedText>
               <ThemedText variant="subtitle">Lanjutkan progresmu</ThemedText>
             </View>
-            <BellIcon size={26} color={colors.textSecondary} />
+            {/* Tombol lonceng: membuka pop-up notifikasi (bukan dekorasi). */}
+            <Pressable
+              onPress={() => setNotificationOpen(true)}
+              hitSlop={8}
+              style={({ pressed }) => [
+                styles.bellButton,
+                pressed && styles.bellButtonPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={
+                unreadCount > 0
+                  ? `Notifikasi, ${unreadCount} belum dibaca`
+                  : "Notifikasi"
+              }
+            >
+              <BellIcon size={22} color={colors.textSecondary} />
+              {unreadCount > 0 ? (
+                <View style={styles.bellBadge}>
+                  <ThemedText style={styles.bellBadgeText}>
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </ThemedText>
+                </View>
+              ) : null}
+            </Pressable>
           </View>
         </SafeAreaView>
 
@@ -279,6 +331,16 @@ export default function Dashboard() {
           </View>
         </Pressable>
       </ScrollView>
+
+      {/* Pop-up notifikasi (overlay) — pengguna tetap di Dashboard. */}
+      <NotificationPopup
+        visible={notificationOpen}
+        notifications={notifications}
+        onClose={() => setNotificationOpen(false)}
+        onRead={markAsRead}
+        onMarkAllRead={markAllAsRead}
+        onDeleteAll={removeAll}
+      />
     </SafeAreaView>
   );
 }
@@ -320,6 +382,40 @@ const styles = StyleSheet.create({
   },
   headerText: {
     gap: 4,
+  },
+  bellButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+    marginTop: -2,
+  },
+  bellButtonPressed: {
+    opacity: 0.75,
+  },
+  bellBadge: {
+    position: "absolute",
+    top: -3,
+    right: -3,
+    minWidth: 17,
+    height: 17,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: "#1877F2",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.background,
+  },
+  bellBadgeText: {
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   mainCard: {
     backgroundColor: colors.primary,

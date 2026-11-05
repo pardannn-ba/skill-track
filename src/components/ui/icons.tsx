@@ -1,7 +1,10 @@
 import {
   Bell,
   Book,
+  Calendar,
   ChartColumn,
+  CheckCheck,
+  Clock,
   ChevronLeft,
   ChevronRight,
   CircleUser,
@@ -11,8 +14,11 @@ import {
   Mail,
   Search,
   Settings,
+  GraduationCap,
   SquareCheckBig,
   Star,
+  Trash2,
+  Trophy,
   User,
   X,
   type LucideIcon,
@@ -95,6 +101,36 @@ export const LockIcon = ({ size = 24, color }: IconProps) => (
 /** Ikon pengguna untuk input Nama Lengkap pada halaman register. */
 export const UserIcon = ({ size = 24, color }: IconProps) => (
   <User size={size} color={color} />
+);
+
+/** Ikon kalender untuk notifikasi pengingat belajar harian. */
+export const CalendarIcon = ({ size = 24, color }: IconProps) => (
+  <Calendar size={size} color={color} />
+);
+
+/** Ikon jam untuk notifikasi belajar yang belum selesai. */
+export const ClockIcon = ({ size = 24, color }: IconProps) => (
+  <Clock size={size} color={color} />
+);
+
+/** Ikon topi wisuda untuk notifikasi lanjutkan materi. */
+export const GraduationCapIcon = ({ size = 24, color }: IconProps) => (
+  <GraduationCap size={size} color={color} />
+);
+
+/** Ikon piala untuk notifikasi pencapaian. */
+export const TrophyIcon = ({ size = 24, color }: IconProps) => (
+  <Trophy size={size} color={color} />
+);
+
+/** Ikon centang ganda untuk aksi "Tandai semua dibaca". */
+export const CheckAllIcon = ({ size = 24, color }: IconProps) => (
+  <CheckCheck size={size} color={color} />
+);
+
+/** Ikon tempat sampah untuk aksi "Hapus semua" notifikasi. */
+export const TrashIcon = ({ size = 24, color }: IconProps) => (
+  <Trash2 size={size} color={color} />
 );
 
 /** Ikon keluar (logout) di halaman Profil. */

@@ -79,7 +79,7 @@ export default function LoginScreen() {
         >
           {/* Header: logo + judul + subtitle, rata tengah */}
           <View style={styles.header}>
-            <SkillTrackLogo size={88} />
+            <SkillTrackLogo size={190} />
             <ThemedText style={styles.title}>Selamat Datang</ThemedText>
             <ThemedText style={styles.subtitle}>
               Lacak progres, Capai skill impianmu
