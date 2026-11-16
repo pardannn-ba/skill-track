@@ -1,4 +1,4 @@
-
+import { Platform } from "react-native";
 import { supabase } from "@/lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 
@@ -449,6 +449,46 @@ export async function changePassword(
     return {
       ok: false,
       error: "Gagal mengganti password. Silakan coba lagi.",
+    };
+  }
+}
+
+export async function sendPasswordResetEmail(
+  emailInput: string
+): Promise<ProfileResult> {
+  const email = emailInput.trim().toLowerCase();
+
+  if (!email || !EMAIL_REGEX.test(email)) {
+    return {
+      ok: false,
+      error: "Masukkan alamat email yang valid pada kolom login.",
+    };
+  }
+
+  try {
+    const redirectTo =
+      Platform.OS === "web"
+        ? `${window.location.origin}/reset-password`
+        : undefined;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      ...(redirectTo ? { redirectTo } : {}),
+    });
+
+    if (error) {
+      return {
+        ok: false,
+        error: error.message,
+      };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    console.error("Password reset error:", error);
+
+    return {
+      ok: false,
+      error: "Gagal mengirim email pemulihan. Coba lagi nanti.",
     };
   }
 }

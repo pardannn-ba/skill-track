@@ -1,11 +1,11 @@
+import AuthSplash from "@/components/auth/auth-splash";
+import { colors } from "@/constants/theme";
+import { useAuthState } from "@/hooks/use-auth-state";
 import { Stack } from "expo-router";
-import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
 import { useCallback, useEffect, useState } from "react";
-import { colors } from "@/constants/theme";
-import AuthSplash from "@/components/auth/auth-splash";
-import { useAuthState } from "@/hooks/use-auth-state";
 
 // Tahan splash native (app.json) sampai splash animasi JS siap tampil,
 // agar transisi dari splash bawaan Expo ke splash animasi tidak berkedip.
@@ -22,7 +22,7 @@ export default function RootLayout() {
     void SystemUI.setBackgroundColorAsync(colors.background);
     // Splash native disembunyikan setelah frame pertama tampil;
     // splash animasi JS mengambil alih di layar yang sama warnanya.
-    void SplashScreen.hideAsync().catch(() => {});
+    void SplashScreen.hideAsync().catch(() => { });
   }, []);
 
   const handleSplashDone = useCallback(() => {
@@ -58,12 +58,15 @@ export default function RootLayout() {
           <Stack.Screen name="skill-detail" />
           <Stack.Screen name="settings" />
         </Stack.Protected>
-        <Stack.Protected guard={session === null}>
+
+        <Stack.Protected guard={session === null}>  
           <Stack.Screen name="login" />
           <Stack.Screen name="register" />
         </Stack.Protected>
-      </Stack>
 
+        {/* Halaman reset password bisa diakses dari alur pemulihan akun */}
+        <Stack.Screen name="reset-password" />
+      </Stack>
       {/* Splash animasi pembuka — menutup navigator sampai animasi & sesi selesai. */}
       {!splashDone ? <AuthSplash ready={ready} onDone={handleSplashDone} /> : null}
     </>
