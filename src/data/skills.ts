@@ -22,7 +22,7 @@ export type Skill = {
 export const skillsData: Skill[] = [
   {
     id: "html",
-    name: "HTML",
+    name: "HTML",git status
     description: "Dasar pembuatan halaman web",
     category: "Programming",
     level: "Pemula",
