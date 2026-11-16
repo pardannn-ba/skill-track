@@ -1,44 +1,32 @@
-<<<<<<< HEAD
-import { testDatabase } from "@/lib/testDatabase";
-import { useEffect } from "react";
 
-import ProfileHeader from "@/components/profile/profile-header";
-=======
-import { useState } from "react";
+import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { colors } from "@/constants/theme";
-import ProgressBar from "@/components/ui/progress-bar";
-import SubjectIcon from "@/components/ui/subject-icon";
-import ThemedText from "@/components/ui/themed-text";
->>>>>>> c403dda3b27caedda0bb1f81de090f736bb73cb4
+
+import NotificationPopup from "@/components/notifications/notification-popup";
+import ProfileHeader from "@/components/profile/profile-header";
 import {
   BellIcon,
   BookIcon,
   ChevronRightIcon,
 } from "@/components/ui/icons";
-<<<<<<< HEAD
 import ProgressBar from "@/components/ui/progress-bar";
 import SubjectIcon from "@/components/ui/subject-icon";
 import ThemedText from "@/components/ui/themed-text";
 import { colors } from "@/constants/theme";
-=======
-import NotificationPopup from "@/components/notifications/notification-popup";
-import { useNotificationsState } from "@/hooks/use-notifications-state";
-import { computeSummary, nextOpenMaterial, startedPaths, type ProgressState } from "@/data/progress-store";
-import { useProgressState } from "@/hooks/use-progress-state";
-import { useAuthState } from "@/hooks/use-auth-state";
-import { profileSubtitle } from "@/data/profile";
->>>>>>> c403dda3b27caedda0bb1f81de090f736bb73cb4
 import { computeProgress } from "@/data/learning-path";
 import { profileSubtitle } from "@/data/profile";
-import { computeSummary, nextOpenMaterial, startedPaths, type ProgressState } from "@/data/progress-store";
+import {
+  computeSummary,
+  nextOpenMaterial,
+  startedPaths,
+  type ProgressState,
+} from "@/data/progress-store";
 import { useAuthState } from "@/hooks/use-auth-state";
+import { useNotificationsState } from "@/hooks/use-notifications-state";
 import { useProgressState } from "@/hooks/use-progress-state";
-import { useRouter } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { SafeAreaView, type Edge } from "react-native-safe-area-context";
+import { testDatabase } from "@/lib/testDatabase";
 
 const bottomEdges: Edge[] = ["left", "right", "bottom"];
 

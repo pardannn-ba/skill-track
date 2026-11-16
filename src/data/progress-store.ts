@@ -1,67 +1,71 @@
-/**
- * Progress belajar disimpan HANYA di memori sesi (in-memory), tanpa
- * AsyncStorage / database. Ketika aplikasi di-refresh, di-reload, atau
- * dimulai ulang, progress kembali ke kondisi awal.
- *
- * Alasan: fitur login belum tersedia. Saat login dibuat nanti,
- * penyimpanan permanen bisa diaktifkan kembali di modul ini saja
- * (API halaman lain tidak perlu berubah).
- *
- * API tetap async supaya semua pemanggil (Home, Learning Path, Progress,
- * Profil, Explore, hooks) tidak perlu diubah.
- */
+
+import { subscribeSession } from "@/data/auth";
 import {
+  countCompleted,
   findMaterialById,
   getLearningPath,
+  learningPaths,
   sanitizeCompleted,
-  countCompleted,
 } from "@/data/learning-path";
+import { supabase } from "@/lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { subscribeSession } from "@/data/auth";
 
-//
-// Sumber data utama: skill yang sudah dimulai + status materi tiap skill.
-// Persentase TIDAK disimpan — selalu dihitung dari materi selesai.
-//
+// ========================================
+// DATABASE MAPPING
+// ========================================
 
-/**
- * Kunci lama yang dulu dipakai penyimpanan permanen. Tidak lagi dibaca
- * atau ditulis; dibersihkan sekali saat sesi baru agar progress lama
- * dari build sebelumnya tidak muncul kembali.
- * (Dipertahankan sebagai export konstanta agar import lama tetap valid.)
- */
+// ID skill lokal aplikasi -> ID skill Supabase.
+const databaseSkillIds: Record<string, number> = {
+  html: 1,
+  css: 2,
+  uiux: 3,
+  english: 4,
+};
+
+type DatabaseMaterial = {
+  id: number;
+  skill_id: number;
+  order_number: number;
+};
+
+// Pemetaan ID materi lokal -> ID materi Supabase.
+let databaseMaterialIds = new Map<string, number>();
+
+// ========================================
+// PROGRESS STATE
+// ========================================
+
 export const progressStorageKey = "@skill-track/progress/v1";
 
-/** Kunci penyimpanan legacy learning path HTML (kompatibilitas import). */
 export const legacyProgressKeys = [
   progressStorageKey,
   "@skill-track/learning-path/html/completed",
-  // Aktivitas mingguan juga data progress belajar — ikut dibersihkan.
   "@skill-track/profile/activity",
 ] as const;
 
 type StoredState = {
-  /** Id skill yang sudah dimulai (urutan mulai). */
   started: string[];
-  /** Id materi yang sudah selesai di semua skill. */
   completed: string[];
 };
 
-/** Snapshot state yang aman dipakai semua halaman. */
 export type ProgressState = StoredState;
 
-const initialState: ProgressState = { started: [], completed: [] };
+const initialState: ProgressState = {
+  started: [],
+  completed: [],
+};
 
-/** State sesi di memori — sumber tunggal selama aplikasi berjalan. */
 let cache: ProgressState = initialState;
+let loadedForUser: string | null = null;
 
-/** Listener dipanggil saat state berubah (untuk update antar halaman). */
 type Listener = (state: ProgressState) => void;
 const listeners = new Set<Listener>();
 
-/** Subscribe perubahan state; kembalikan fungsi berhenti berlangganan. */
-export function subscribeProgress(listener: Listener): () => void {
+export function subscribeProgress(
+  listener: Listener
+): () => void {
   listeners.add(listener);
+
   return () => {
     listeners.delete(listener);
   };
@@ -73,171 +77,362 @@ function notify(state: ProgressState) {
   }
 }
 
-// Isolasi per akun: saat akun yang login berganti (login/logout), seluruh
-// progress in-memory dibuang agar pengguna baru tidak melihat progress
-// milik pengguna sebelumnya.
-let progressOwner: string | null = null;
-subscribeSession((session) => {
-  const owner = session?.username ?? null;
-  if (owner !== progressOwner) {
-    progressOwner = owner;
-    if (cache.started.length > 0 || cache.completed.length > 0) {
-      applyState(initialState);
-    }
-  }
-});
-
-// Bersihkan sisa key permanen dari build lama (sekali per sesi) supaya
-// progress lama tidak pernah muncul kembali dari storage.
-let cleanupDone = false;
-async function cleanupLegacyStorage(): Promise<void> {
-  if (cleanupDone) {
-    return;
-  }
-  cleanupDone = true;
-  try {
-    await AsyncStorage.multiRemove([...legacyProgressKeys]);
-  } catch {
-    // Gagal membersihkan tidak memengaruhi sesi in-memory.
-  }
-}
-
-/**
- * Baca state progres sesi ini. Selalu diselesaikan secara async agar
- * pemanggil yang sudah awaits tetap berjalan; datanya dari memori.
- */
-export async function loadProgress(): Promise<ProgressState> {
-  await cleanupLegacyStorage();
-  return cache;
-}
-
-/** Terapkan state baru ke memori dan broadcast ke listener. */
 function applyState(next: ProgressState): ProgressState {
   cache = next;
   notify(next);
   return next;
 }
 
-/** Mulai sebuah skill (idempotent); return state terbaru. */
-export async function startSkill(skillId: string): Promise<ProgressState> {
-  await cleanupLegacyStorage();
-  if (!getLearningPath(skillId) || cache.started.includes(skillId)) {
-    return cache;
+// ========================================
+// SESSION & LEGACY STORAGE
+// ========================================
+
+let progressOwner: string | null = null;
+
+subscribeSession((session) => {
+  const owner = session?.username ?? null;
+
+  if (owner !== progressOwner) {
+    progressOwner = owner;
+    loadedForUser = null;
+    databaseMaterialIds.clear();
+    applyState(initialState);
   }
-  return applyState({ ...cache, started: [...cache.started, skillId] });
+});
+
+let cleanupDone = false;
+
+async function cleanupLegacyStorage(): Promise<void> {
+  if (cleanupDone) return;
+
+  cleanupDone = true;
+
+  try {
+    await AsyncStorage.multiRemove([...legacyProgressKeys]);
+  } catch (error) {
+    console.warn("Gagal membersihkan progress lama:", error);
+  }
 }
 
-/**
- * Tandai satu materi selesai. Gating (materi terkunci) tetap dihalaman
- * pemanggil, tetapi di sini dicek ulang agar tidak ada progres ganda:
- * id sudah pernah selesai, atau skill belum dimulai, tidak diubah.
- */
-export async function completeMaterial(materialId: string): Promise<ProgressState> {
+// ========================================
+// HELPER
+// ========================================
+
+async function getCurrentUserId(): Promise<string | null> {
+  const { data, error } = await supabase.auth.getSession();
+
+  if (error) throw error;
+
+  return data.session?.user.id ?? null;
+}
+
+function createMaterialMapping(rows: DatabaseMaterial[]) {
+  const rowsByPosition = new Map<string, DatabaseMaterial>();
+
+  for (const row of rows) {
+    rowsByPosition.set(
+      `${row.skill_id}:${row.order_number}`,
+      row
+    );
+  }
+
+  const mapping = new Map<string, number>();
+
+  for (const path of learningPaths) {
+    const databaseSkillId = databaseSkillIds[path.skillId];
+
+    if (!databaseSkillId) continue;
+
+    path.materials.forEach((material, index) => {
+      const orderNumber = index + 1;
+
+      const databaseMaterial = rowsByPosition.get(
+        `${databaseSkillId}:${orderNumber}`
+      );
+
+      if (databaseMaterial) {
+        mapping.set(material.id, databaseMaterial.id);
+      }
+    });
+  }
+
+  return mapping;
+}
+
+// ========================================
+// LOAD PROGRESS FROM SUPABASE
+// ========================================
+
+export async function loadProgress(): Promise<ProgressState> {
+  await cleanupLegacyStorage();
+
+  const userId = await getCurrentUserId();
+
+  if (!userId) {
+    loadedForUser = null;
+    databaseMaterialIds.clear();
+    return applyState(initialState);
+  }
+
+  // Jika data akun ini sudah dimuat, gunakan cache.
+  if (loadedForUser === userId) {
+    return cache;
+  }
+
+  const [skillsResult, progressResult, materialsResult] =
+    await Promise.all([
+      supabase
+        .from("user_skills")
+        .select("skill_id")
+        .eq("user_id", userId),
+
+      supabase
+        .from("user_progress")
+        .select("material_id, is_completed")
+        .eq("user_id", userId),
+
+      supabase
+        .from("materials")
+        .select("id, skill_id, order_number"),
+    ]);
+
+  if (skillsResult.error) throw skillsResult.error;
+  if (progressResult.error) throw progressResult.error;
+  if (materialsResult.error) throw materialsResult.error;
+
+  const materialRows =
+    materialsResult.data as DatabaseMaterial[];
+
+  databaseMaterialIds = createMaterialMapping(materialRows);
+
+  const started = (skillsResult.data ?? [])
+    .map((row) =>
+      Object.entries(databaseSkillIds).find(
+        ([, databaseId]) => databaseId === row.skill_id
+      )?.[0]
+    )
+    .filter((id): id is string => Boolean(id));
+
+  const reverseMaterialMapping = new Map<number, string>();
+
+  for (const [localId, databaseId] of databaseMaterialIds) {
+    reverseMaterialMapping.set(databaseId, localId);
+  }
+
+  const completed = (progressResult.data ?? [])
+    .filter((row) => row.is_completed === true)
+    .map((row) => reverseMaterialMapping.get(row.material_id))
+    .filter((id): id is string => Boolean(id));
+
+  loadedForUser = userId;
+
+  return applyState({
+    started,
+    completed,
+  });
+}
+
+// ========================================
+// START SKILL
+// ========================================
+
+export async function startSkill(
+  skillId: string
+): Promise<ProgressState> {
   const state = await loadProgress();
-  const resolved = resolveMaterial(materialId);
-  const path = resolved?.path;
-  if (!resolved || !path) {
+
+  const databaseSkillId = databaseSkillIds[skillId];
+
+  if (!getLearningPath(skillId) || !databaseSkillId) {
     return state;
   }
+
+  if (state.started.includes(skillId)) {
+    return state;
+  }
+
+  const userId = await getCurrentUserId();
+
+  if (!userId) {
+    throw new Error("Kamu harus login terlebih dahulu.");
+  }
+
+  // Periksa apakah skill sudah pernah dimulai.
+  const { data: existing, error: checkError } = await supabase
+    .from("user_skills")
+    .select("skill_id")
+    .eq("user_id", userId)
+    .eq("skill_id", databaseSkillId)
+    .limit(1);
+
+  if (checkError) throw checkError;
+
+  // Simpan hanya jika belum ada.
+  if (!existing || existing.length === 0) {
+    const { error } = await supabase
+      .from("user_skills")
+      .insert({
+        user_id: userId,
+        skill_id: databaseSkillId,
+      });
+
+    if (error) throw error;
+  }
+
+  return applyState({
+    ...state,
+    started: [...state.started, skillId],
+  });
+}
+
+// ========================================
+// COMPLETE MATERIAL
+// ========================================
+
+export async function completeMaterial(
+  materialId: string
+): Promise<ProgressState> {
+  const state = await loadProgress();
+
+  const resolved = resolveMaterial(materialId);
+  const path = resolved?.path;
+
+  if (!resolved || !path) return state;
+
   if (!state.started.includes(path.skillId)) {
     return state;
   }
+
   if (state.completed.includes(materialId)) {
     return state;
   }
+
+  const databaseMaterialId = databaseMaterialIds.get(materialId);
+
+  if (!databaseMaterialId) {
+    throw new Error(
+      `ID database untuk materi ${materialId} tidak ditemukan.`
+    );
+  }
+
+  // Panggil fungsi PostgreSQL yang sudah dibuat sebelumnya.
+  // Fungsi ini juga memeriksa urutan penyelesaian materi.
+  const { error } = await supabase.rpc("complete_material", {
+    p_material_id: databaseMaterialId,
+  });
+
+  if (error) throw error;
+
   return applyState({
     ...state,
     completed: [...state.completed, materialId],
   });
 }
 
-/** Batalkan penyelesaian satu materi (jarang diperlukan). */
-export async function uncompleteMaterial(materialId: string): Promise<ProgressState> {
-  const state = await loadProgress();
-  if (!state.completed.includes(materialId)) {
-    return state;
-  }
-  return applyState({
-    ...state,
-    completed: state.completed.filter((id) => id !== materialId),
-  });
+// ========================================
+// UNCOMPLETE MATERIAL
+// ========================================
+
+// Belum menghapus progres dari database karena belum ada
+// fungsi database khusus untuk membatalkan penyelesaian.
+export async function uncompleteMaterial(
+  materialId: string
+): Promise<ProgressState> {
+  return loadProgress();
 }
 
-/**
- * Hapus seluruh progress sesi. Dipakai uji/debug dipakai program;
- * dipanggil juga saat pemanggil ingin memulai sesi bersih.
- */
+// ========================================
+// RESET PROGRESS
+// ========================================
+
+// Hanya mengosongkan cache lokal.
+// Tidak menghapus data permanen di Supabase.
 export async function resetProgress(): Promise<void> {
-  await cleanupLegacyStorage();
-  applyState({ started: [], completed: [] });
+  applyState(initialState);
 }
 
-/** Cari learning path + materi berdasarkan id materi. */
+// ========================================
+// MATERIAL HELPERS
+// ========================================
+
 export function resolveMaterial(materialId: string) {
   return findMaterialById(materialId);
 }
 
-/** Validasi/bersihkan daftar id terhadap materi (helper reuse). */
 export function sanitizeSessionMaterials(
   path: NonNullable<ReturnType<typeof getLearningPath>>,
-  ids: readonly string[],
+  ids: readonly string[]
 ): string[] {
   return sanitizeCompleted(path.materials, ids);
 }
 
-//
-// Derivasi state: hitung turunan (progres, status, materi berikutnya)
-// dari ProgressState — persentase tidak pernah disimpan.
-//
+// ========================================
+// DERIVED PROGRESS
+// ========================================
 
-/** Materi terakhir yang belum selesai pada satu skill; null jika semua selesai. */
 export function nextOpenMaterial(
   path: NonNullable<ReturnType<typeof getLearningPath>>,
-  state: ProgressState,
+  state: ProgressState
 ): { id: string; title: string; description: string } | null {
   const activeIndex = path.materials.findIndex(
-    (material) => !state.completed.includes(material.id),
+    (material) => !state.completed.includes(material.id)
   );
-  const material = activeIndex >= 0 ? path.materials[activeIndex] : null;
+
+  const material =
+    activeIndex >= 0 ? path.materials[activeIndex] : null;
+
   return material
-    ? { id: material.id, title: material.title, description: material.description }
+    ? {
+        id: material.id,
+        title: material.title,
+        description: material.description,
+      }
     : null;
 }
 
-/** Skill yang sudah dimulai beserta data path-nya (urut sesuai dimulai). */
 export function startedPaths(state: ProgressState) {
   return state.started
     .map((id) => getLearningPath(id))
-    .filter((path): path is NonNullable<ReturnType<typeof getLearningPath>> => path !== null);
+    .filter(
+      (path): path is NonNullable<
+        ReturnType<typeof getLearningPath>
+      > => path !== null
+    );
 }
 
-/** Statistik ringkas untuk Home, Progress, dan Profil. */
 export type ProgressSummary = {
-  /** Jumlah skill aktif (yang sudah dimulai). */
   activeSkills: number;
-  /** Jumlah materi selesai pada skill yang sudah dimulai. */
   completedMaterials: number;
-  /** Total materi pada skill yang sudah dimulai. */
   totalMaterials: number;
-  /** Persen keseluruhan 0–100 (0 jika belum ada skill dimulai). */
   overallPercent: number;
 };
 
-export function computeSummary(state: ProgressState): ProgressSummary {
+export function computeSummary(
+  state: ProgressState
+): ProgressSummary {
   const paths = startedPaths(state);
+
   let completedMaterials = 0;
   let totalMaterials = 0;
+
   for (const path of paths) {
-    completedMaterials += countCompleted(path.materials, state.completed);
+    completedMaterials += countCompleted(
+      path.materials,
+      state.completed
+    );
+
     totalMaterials += path.materials.length;
   }
+
   return {
     activeSkills: paths.length,
     completedMaterials,
     totalMaterials,
     overallPercent:
       totalMaterials > 0
-        ? Math.round((completedMaterials / totalMaterials) * 100)
+        ? Math.round(
+            (completedMaterials / totalMaterials) * 100
+          )
         : 0,
   };
 }
