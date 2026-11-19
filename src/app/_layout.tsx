@@ -63,9 +63,6 @@ export default function RootLayout() {
           <Stack.Screen name="login" />
           <Stack.Screen name="register" />
         </Stack.Protected>
-
-        {/* Halaman reset password bisa diakses dari alur pemulihan akun */}
-        <Stack.Screen name="reset-password" />
       </Stack>
       {/* Splash animasi pembuka — menutup navigator sampai animasi & sesi selesai. */}
       {!splashDone ? <AuthSplash ready={ready} onDone={handleSplashDone} /> : null}

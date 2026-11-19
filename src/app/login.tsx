@@ -3,7 +3,7 @@ import SkillTrackLogo from "@/components/auth/skilltrack-logo";
 import { LockIcon, MailIcon } from "@/components/ui/icons";
 import ThemedText from "@/components/ui/themed-text";
 import { colors } from "@/constants/theme";
-import { login, sendPasswordResetEmail } from "@/data/auth";
+import { login } from "@/data/auth";
 import { useAuthState } from "@/hooks/use-auth-state";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
@@ -35,9 +35,6 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
-  const [recoveryError, setRecoveryError] = useState<string | null>(null);
-  const [recoverySending, setRecoverySending] = useState(false);
   // Banner "pendaftaran berhasil" disembunyikan saat pengguna mulai mengetik.
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const justRegistered = registeredName.length > 0 && !bannerDismissed;
@@ -46,29 +43,6 @@ export default function LoginScreen() {
   if (ready && session) {
     return <Redirect href="/(tabs)" />;
   }
-
-  const handlePasswordReset = async () => {
-    if (recoverySending) return;
-
-    setRecoveryMessage(null);
-    setRecoveryError(null);
-    setRecoverySending(true);
-
-    try {
-      const result = await sendPasswordResetEmail(identifier);
-
-      if (!result.ok) {
-        setRecoveryError(result.error);
-        return;
-      }
-
-      setRecoveryMessage(
-        "Email pemulihan berhasil dikirim. Periksa inbox atau folder spam."
-      );
-    } finally {
-      setRecoverySending(false);
-    }
-  };
 
   const handleLogin = async () => {
     // Cegah proses ganda selagi login berjalan.
@@ -162,27 +136,6 @@ export default function LoginScreen() {
                 editable={!submitting}
                 accessibilityLabel="Password"
               />
-              <Pressable
-                onPress={() => void handlePasswordReset()}
-                disabled={recoverySending || submitting}
-                style={{ alignSelf: "flex-end", paddingVertical: 4 }}
-              >
-                <ThemedText style={{ color: colors.textSecondary, fontSize: 13 }}>
-                  {recoverySending ? "Mengirim email..." : "Lupa Password?"}
-                </ThemedText>
-              </Pressable>
-
-              {recoveryMessage ? (
-                <ThemedText style={{ color: "#4ADE9E", fontSize: 13 }}>
-                  {recoveryMessage}
-                </ThemedText>
-              ) : null}
-
-              {recoveryError ? (
-                <ThemedText style={styles.errorText}>
-                  {recoveryError}
-                </ThemedText>
-              ) : null}
               {error ? (
                 <ThemedText style={styles.errorText} accessibilityRole="alert">
                   {error}
